@@ -27,7 +27,7 @@
       </table>
     </a-col>
     <a-col :xs="24" :md="12">
-      <template v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
+      <template v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS || dbInbound.isNaive">
         <table>
           <tr>
             <td>{{ i18n "transmission" }}</td>
@@ -90,15 +90,17 @@
       <a-tag :color="inbound.stream.security == 'none' ? 'red' : 'green'">[[
         inbound.stream.security ]]</a-tag>
       <br />
-      {{ i18n "encryption" }}
-      <a-tag class="info-large-tag"
-        :color="inbound.settings.encryption && inbound.settings.encryption !== 'none' ? 'green' : 'red'">[[
-        inbound.settings.encryption ? inbound.settings.encryption : ''
-        ]]</a-tag>
-      <a-tooltip title='{{ i18n "copy" }}'>
-        <a-button size="small" icon="snippets" @click="copy(inbound.settings.encryption)"></a-button>
-      </a-tooltip>
-      <br />
+      <template v-if="!dbInbound.isNaive">
+        {{ i18n "encryption" }}
+        <a-tag class="info-large-tag"
+          :color="inbound.settings.encryption && inbound.settings.encryption !== 'none' ? 'green' : 'red'">[[
+          inbound.settings.encryption ? inbound.settings.encryption : ''
+          ]]</a-tag>
+        <a-tooltip title='{{ i18n "copy" }}'>
+          <a-button size="small" icon="snippets" @click="copy(inbound.settings.encryption)"></a-button>
+        </a-tooltip>
+        <br />
+      </template>
       <template v-if="inbound.stream.security != 'none'">
         {{ i18n "domainName" }}
         <a-tag v-if="inbound.serverName" color="green">[[ inbound.serverName

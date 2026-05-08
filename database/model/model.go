@@ -2,6 +2,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
@@ -17,6 +18,7 @@ const (
 	VLESS       Protocol = "vless"
 	Tunnel      Protocol = "tunnel"
 	HTTP        Protocol = "http"
+	Naive       Protocol = "naive"
 	Trojan      Protocol = "trojan"
 	Shadowsocks Protocol = "shadowsocks"
 	Mixed       Protocol = "mixed"
@@ -34,6 +36,61 @@ const (
 // with the literal v2 string would otherwise fall through (#4081).
 func IsHysteria(p Protocol) bool {
 	return p == Hysteria || p == Hysteria2
+}
+
+func xrayProtocol(p Protocol) string {
+	if p == Naive {
+		return string(HTTP)
+	}
+	return string(p)
+}
+
+func naiveSettingsForXray(raw string) json_util.RawMessage {
+	settings := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return json_util.RawMessage(raw)
+	}
+
+	clients, hasClients := settings["clients"].([]any)
+	accounts := make([]map[string]string, 0, len(clients))
+	if hasClients {
+		for _, item := range clients {
+			client, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			user, _ := client["user"].(string)
+			if user == "" {
+				user, _ = client["email"].(string)
+			}
+			if user == "" {
+				user, _ = client["id"].(string)
+			}
+			pass, _ := client["pass"].(string)
+			if pass == "" {
+				pass, _ = client["password"].(string)
+			}
+			if user == "" || pass == "" {
+				continue
+			}
+			accounts = append(accounts, map[string]string{
+				"user": user,
+				"pass": pass,
+			})
+		}
+		settings["accounts"] = accounts
+	}
+
+	delete(settings, "clients")
+	if _, ok := settings["allowTransparent"]; !ok {
+		settings["allowTransparent"] = false
+	}
+
+	modified, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return json_util.RawMessage(raw)
+	}
+	return json_util.RawMessage(modified)
 }
 
 // User represents a user account in the 3x-ui panel.
@@ -99,11 +156,15 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 		listen = "0.0.0.0"
 	}
 	listen = fmt.Sprintf("\"%v\"", listen)
+	settings := json_util.RawMessage(i.Settings)
+	if i.Protocol == Naive {
+		settings = naiveSettingsForXray(i.Settings)
+	}
 	return &xray.InboundConfig{
 		Listen:         json_util.RawMessage(listen),
 		Port:           i.Port,
-		Protocol:       string(i.Protocol),
-		Settings:       json_util.RawMessage(i.Settings),
+		Protocol:       xrayProtocol(i.Protocol),
+		Settings:       settings,
 		StreamSettings: json_util.RawMessage(i.StreamSettings),
 		Tag:            i.Tag,
 		Sniffing:       json_util.RawMessage(i.Sniffing),

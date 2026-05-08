@@ -129,7 +129,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		FROM inbounds,
 			JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
 		WHERE
-			protocol in ('vmess','vless','trojan','shadowsocks','hysteria','hysteria2')
+			protocol in ('vmess','vless','trojan','shadowsocks','naive','hysteria','hysteria2')
 			AND JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
 	)`, subId, true).Find(&inbounds).Error
 	if err != nil {
@@ -180,6 +180,8 @@ func (s *SubService) getLink(inbound *model.Inbound, email string) string {
 		return s.genTrojanLink(inbound, email)
 	case "shadowsocks":
 		return s.genShadowsocksLink(inbound, email)
+	case "naive":
+		return s.genNaiveLink(inbound, email)
 	case "hysteria", "hysteria2":
 		return s.genHysteriaLink(inbound, email)
 	}
@@ -507,6 +509,62 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	url.RawQuery = q.Encode()
 	url.Fragment = s.genRemark(inbound, email, "")
 	return url.String()
+}
+
+func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.Naive {
+		return ""
+	}
+
+	clients, _ := s.inboundService.GetClients(inbound)
+	clientIndex := findClientIndex(clients, email)
+	if clientIndex < 0 {
+		return ""
+	}
+
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	externalProxies, _ := stream["externalProxy"].([]any)
+	if len(externalProxies) > 0 {
+		links := make([]string, 0, len(externalProxies))
+		for _, externalProxy := range externalProxies {
+			ep, ok := externalProxy.(map[string]any)
+			if !ok {
+				continue
+			}
+			dest, _ := ep["dest"].(string)
+			portF, okPort := ep["port"].(float64)
+			if dest == "" || !okPort {
+				continue
+			}
+			epRemark, _ := ep["remark"].(string)
+			links = append(links, buildNaiveURL(
+				dest,
+				int(portF),
+				clients[clientIndex].Email,
+				clients[clientIndex].Password,
+				s.genRemark(inbound, email, epRemark),
+			))
+		}
+		return strings.Join(links, "\n")
+	}
+
+	return buildNaiveURL(
+		s.resolveInboundAddress(inbound),
+		inbound.Port,
+		clients[clientIndex].Email,
+		clients[clientIndex].Password,
+		s.genRemark(inbound, email, ""),
+	)
+}
+
+func buildNaiveURL(address string, port int, user string, pass string, remark string) string {
+	u := &url.URL{
+		Scheme: "https",
+		Host:   net.JoinHostPort(address, fmt.Sprint(port)),
+		User:   url.UserPassword(user, pass),
+	}
+	u.Fragment = remark
+	return u.String()
 }
 
 func (s *SubService) resolveInboundAddress(inbound *model.Inbound) string {

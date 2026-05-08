@@ -257,6 +257,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client ID")
 			}
+		case "naive":
+			if client.Email == "" || client.Password == "" {
+				return inbound, false, common.NewError("empty client ID")
+			}
 		case "hysteria", "hysteria2":
 			if client.Auth == "" {
 				return inbound, false, common.NewError("empty client ID")
@@ -752,6 +756,10 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 			if client.Email == "" {
 				return false, common.NewError("empty client ID")
 			}
+		case "naive":
+			if client.Email == "" || client.Password == "" {
+				return false, common.NewError("empty client ID")
+			}
 		case "hysteria", "hysteria2":
 			if client.Auth == "" {
 				return false, common.NewError("empty client ID")
@@ -833,6 +841,8 @@ func (s *InboundService) getClientPrimaryKey(protocol model.Protocol, client mod
 		return client.Password
 	case model.Shadowsocks:
 		return client.Email
+	case model.Naive:
+		return client.Password
 	case model.Hysteria:
 		return client.Auth
 	default:
@@ -891,7 +901,7 @@ func (s *InboundService) buildTargetClientFromSource(source model.Client, target
 		if flow == "xtls-rprx-vision" || flow == "xtls-rprx-vision-udp443" {
 			target.Flow = flow
 		}
-	case model.Trojan, model.Shadowsocks:
+	case model.Trojan, model.Shadowsocks, model.Naive:
 		target.Password = s.generateRandomCredential(targetProtocol)
 	case model.Hysteria:
 		target.Auth = s.generateRandomCredential(targetProtocol)
@@ -1042,6 +1052,8 @@ func (s *InboundService) DelInboundClient(inboundId int, clientId string) (bool,
 		client_key = "password"
 	case "shadowsocks":
 		client_key = "email"
+	case "naive":
+		client_key = "password"
 	case "hysteria", "hysteria2":
 		client_key = "auth"
 	}
@@ -1156,6 +1168,9 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 		case "shadowsocks":
 			oldClientId = oldClient.Email
 			newClientId = clients[0].Email
+		case "naive":
+			oldClientId = oldClient.Password
+			newClientId = clients[0].Password
 		case "hysteria", "hysteria2":
 			oldClientId = oldClient.Auth
 			newClientId = clients[0].Auth
@@ -1941,6 +1956,8 @@ func (s *InboundService) SetClientTelegramUserID(trafficId int, tgId int64) (boo
 			switch inbound.Protocol {
 			case "trojan":
 				clientId = oldClient.Password
+			case "naive":
+				clientId = oldClient.Password
 			case "shadowsocks":
 				clientId = oldClient.Email
 			default:
@@ -2027,6 +2044,8 @@ func (s *InboundService) ToggleClientEnableByEmail(clientEmail string) (bool, bo
 			switch inbound.Protocol {
 			case "trojan":
 				clientId = oldClient.Password
+			case "naive":
+				clientId = oldClient.Password
 			case "shadowsocks":
 				clientId = oldClient.Email
 			default:
@@ -2108,6 +2127,8 @@ func (s *InboundService) ResetClientIpLimitByEmail(clientEmail string, count int
 			switch inbound.Protocol {
 			case "trojan":
 				clientId = oldClient.Password
+			case "naive":
+				clientId = oldClient.Password
 			case "shadowsocks":
 				clientId = oldClient.Email
 			default:
@@ -2166,6 +2187,8 @@ func (s *InboundService) ResetClientExpiryTimeByEmail(clientEmail string, expiry
 		if oldClient.Email == clientEmail {
 			switch inbound.Protocol {
 			case "trojan":
+				clientId = oldClient.Password
+			case "naive":
 				clientId = oldClient.Password
 			case "shadowsocks":
 				clientId = oldClient.Email
@@ -2228,6 +2251,8 @@ func (s *InboundService) ResetClientTrafficLimitByEmail(clientEmail string, tota
 		if oldClient.Email == clientEmail {
 			switch inbound.Protocol {
 			case "trojan":
+				clientId = oldClient.Password
+			case "naive":
 				clientId = oldClient.Password
 			case "shadowsocks":
 				clientId = oldClient.Email

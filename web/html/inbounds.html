@@ -286,7 +286,7 @@
                       <div class="protocol-tags">
                         <a-tag color="purple">[[ dbInbound.protocol ]]</a-tag>
                         <template
-                          v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
+                          v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS || dbInbound.isNaive">
                           <a-tag color="green">[[ dbInbound.toInbound().stream.network ]]</a-tag>
                           <a-tag v-if="dbInbound.toInbound().stream.isTls" color="blue">TLS</a-tag>
                           <a-tag v-if="dbInbound.toInbound().stream.isReality" color="blue">Reality</a-tag>
@@ -452,7 +452,7 @@
                                 <a-tag :style="{ margin: '0' }" color="purple">[[ dbInbound.protocol
                                   ]]</a-tag>
                                 <template
-                                  v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
+                                  v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS || dbInbound.isNaive">
                                   <a-tag :style="{ margin: '0' }" color="blue">[[
                                     dbInbound.toInbound().stream.network
                                     ]]</a-tag>
@@ -644,7 +644,7 @@
                       </a-popover>
                     </template>
                     <template slot="expandedRowRender" slot-scope="record">
-                      <a-table :row-key="client => client.id"
+                      <a-table :row-key="client => app.getClientId(record.protocol, client)"
                         :columns="isMobile ? innerMobileColumns : innerColumns"
                         :data-source="getInboundClients(record)"
                         :pagination=pagination(getInboundClients(record))
@@ -1567,6 +1567,7 @@
         }
         switch (protocol) {
           case Protocols.TROJAN:
+          case Protocols.NAIVE:
           case Protocols.SHADOWSOCKS:
             return clients.findIndex(item => item && item.password === client.password && item.email === client
               .email);
@@ -1663,6 +1664,7 @@
       getClientId(protocol, client) {
         switch (protocol) {
           case Protocols.TROJAN:
+          case Protocols.NAIVE:
             return client.password;
           case Protocols.SHADOWSOCKS:
             return client.email;

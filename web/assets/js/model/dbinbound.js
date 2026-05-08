@@ -51,6 +51,10 @@ class DBInbound {
         return this.protocol === Protocols.SHADOWSOCKS;
     }
 
+    get isNaive() {
+        return this.protocol === Protocols.NAIVE;
+    }
+
     get isMixed() {
         return this.protocol === Protocols.MIXED;
     }
@@ -147,6 +151,7 @@ class DBInbound {
             case Protocols.VMESS:
             case Protocols.VLESS:
             case Protocols.TROJAN:
+            case Protocols.NAIVE:
             case Protocols.HYSTERIA:
                 return true;
             case Protocols.SHADOWSOCKS:
@@ -161,6 +166,7 @@ class DBInbound {
             case Protocols.VMESS:
             case Protocols.VLESS:
             case Protocols.TROJAN:
+            case Protocols.NAIVE:
             case Protocols.SHADOWSOCKS:
             case Protocols.HYSTERIA:
                 return true;

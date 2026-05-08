@@ -165,6 +165,9 @@ func (s *SubClashService) buildProxy(inbound *model.Inbound, client model.Client
 	if model.IsHysteria(inbound.Protocol) {
 		return s.buildHysteriaProxy(inbound, client, extraRemark)
 	}
+	if inbound.Protocol == model.Naive {
+		return s.buildNaiveProxy(inbound, client, stream, extraRemark)
+	}
 
 	proxy := map[string]any{
 		"name":   s.SubService.genRemark(inbound, client.Email, extraRemark),
@@ -226,6 +229,40 @@ func (s *SubClashService) buildProxy(inbound *model.Inbound, client model.Client
 		return nil
 	}
 
+	return proxy
+}
+
+func (s *SubClashService) buildNaiveProxy(inbound *model.Inbound, client model.Client, stream map[string]any, extraRemark string) map[string]any {
+	proxy := map[string]any{
+		"name":     s.SubService.genRemark(inbound, client.Email, extraRemark),
+		"type":     "http",
+		"server":   inbound.Listen,
+		"port":     inbound.Port,
+		"username": client.Email,
+		"password": client.Password,
+		"tls":      true,
+	}
+
+	tlsSettings, _ := stream["tlsSettings"].(map[string]any)
+	if tlsSettings != nil {
+		if serverName, ok := tlsSettings["serverName"].(string); ok && serverName != "" {
+			proxy["sni"] = serverName
+		}
+		if alpnList, ok := tlsSettings["alpn"].([]any); ok && len(alpnList) > 0 {
+			out := make([]string, 0, len(alpnList))
+			for _, a := range alpnList {
+				if s, ok := a.(string); ok && s != "" {
+					out = append(out, s)
+				}
+			}
+			if len(out) > 0 {
+				proxy["alpn"] = out
+			}
+		}
+		if fingerprint, ok := tlsSettings["fingerprint"].(string); ok && fingerprint != "" {
+			proxy["client-fingerprint"] = fingerprint
+		}
+	}
 	return proxy
 }
 

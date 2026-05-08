@@ -237,7 +237,7 @@ func (x *XrayAPI) AddUser(Protocol string, inboundTag string, user map[string]an
 			Auth: auth,
 		})
 	default:
-		return nil
+		return fmt.Errorf("adding users dynamically is not supported for protocol %s", Protocol)
 	}
 
 	client := *x.HandlerServiceClient

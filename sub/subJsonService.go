@@ -209,6 +209,8 @@ func (s *SubJsonService) getConfig(inbound *model.Inbound, client model.Client, 
 			newOutbounds = append(newOutbounds, s.genVless(inbound, streamSettings, client))
 		case "trojan", "shadowsocks":
 			newOutbounds = append(newOutbounds, s.genServer(inbound, streamSettings, client))
+		case "naive":
+			newOutbounds = append(newOutbounds, s.genNaive(inbound, streamSettings, client))
 		case "hysteria", "hysteria2":
 			newOutbounds = append(newOutbounds, s.genHy(inbound, newStream, client))
 		}
@@ -400,6 +402,26 @@ func (s *SubJsonService) genServer(inbound *model.Inbound, streamSettings json_u
 	outbound.StreamSettings = streamSettings
 	outbound.Settings = map[string]any{
 		"servers": serverData,
+	}
+
+	result, _ := json.MarshalIndent(outbound, "", "  ")
+	return result
+}
+
+func (s *SubJsonService) genNaive(inbound *model.Inbound, streamSettings json_util.RawMessage, client model.Client) json_util.RawMessage {
+	outbound := Outbound{}
+	outbound.Protocol = string(model.HTTP)
+	outbound.Tag = "proxy"
+	if s.mux != "" {
+		outbound.Mux = json_util.RawMessage(s.mux)
+	}
+	outbound.StreamSettings = streamSettings
+	outbound.Settings = map[string]any{
+		"address": inbound.Listen,
+		"port":    inbound.Port,
+		"user":    client.Email,
+		"pass":    client.Password,
+		"email":   client.Email,
 	}
 
 	result, _ := json.MarshalIndent(outbound, "", "  ")

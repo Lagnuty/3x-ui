@@ -120,6 +120,11 @@
     {{template "form/shadowsocks" .}}
 </template>
 
+<!-- naiveproxy -->
+<template v-if="inbound.protocol === Protocols.NAIVE">
+    {{template "form/naive" .}}
+</template>
+
 <!-- tunnel -->
 <template v-if="inbound.protocol === Protocols.TUNNEL">
     {{template "form/tunnel" .}}

@@ -3,6 +3,7 @@ const Protocols = {
     VLESS: 'vless',
     TROJAN: 'trojan',
     SHADOWSOCKS: 'shadowsocks',
+    NAIVE: 'naive',
     WIREGUARD: 'wireguard',
     HYSTERIA: 'hysteria',
     MIXED: 'mixed',
@@ -1711,6 +1712,7 @@ class Inbound extends XrayCommonClass {
             case Protocols.VLESS: return this.settings.vlesses;
             case Protocols.TROJAN: return this.settings.trojans;
             case Protocols.SHADOWSOCKS: return this.isSSMultiUser ? this.settings.shadowsockses : null;
+            case Protocols.NAIVE: return this.settings.naives;
             case Protocols.HYSTERIA: return this.settings.hysterias;
             default: return null;
         }
@@ -1732,6 +1734,11 @@ class Inbound extends XrayCommonClass {
             this.stream.security = 'tls';
             // Hysteria runs over QUIC and must not inherit TCP TLS ALPN defaults.
             this.stream.tls.alpn = [ALPN_OPTION.H3];
+        }
+        if (protocol === Protocols.NAIVE) {
+            this.stream.network = 'tcp';
+            this.stream.security = 'tls';
+            this.stream.tls.alpn = [ALPN_OPTION.H2, ALPN_OPTION.HTTP1];
         }
     }
 
@@ -1835,6 +1842,7 @@ class Inbound extends XrayCommonClass {
 
     canEnableTls() {
         if (this.protocol === Protocols.HYSTERIA) return true;
+        if (this.protocol === Protocols.NAIVE) return this.network === "tcp";
         if (![Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS].includes(this.protocol)) return false;
         return ["tcp", "ws", "http", "grpc", "httpupgrade", "xhttp"].includes(this.network);
     }
@@ -1862,7 +1870,7 @@ class Inbound extends XrayCommonClass {
     }
 
     canEnableStream() {
-        return [Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS, Protocols.HYSTERIA].includes(this.protocol);
+        return [Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS, Protocols.NAIVE, Protocols.HYSTERIA].includes(this.protocol);
     }
 
     reset() {
@@ -2249,6 +2257,15 @@ class Inbound extends XrayCommonClass {
         return url.toString();
     }
 
+    genNaiveLink(address = '', port = this.port, remark = '', client) {
+        const link = `https://${address}:${port}`;
+        const url = new URL(link);
+        url.username = client.email || '';
+        url.password = client.password || '';
+        url.hash = encodeURIComponent(remark);
+        return url.toString();
+    }
+
     getWireguardTxt(address, port, remark, peerId) {
         let txt = `[Interface]\n`
         txt += `PrivateKey = ${this.settings.peers[peerId].privateKey}\n`
@@ -2323,6 +2340,8 @@ class Inbound extends XrayCommonClass {
                 return this.genSSLink(address, port, forceTls, remark, this.isSSMultiUser ? client.password : '');
             case Protocols.TROJAN:
                 return this.genTrojanLink(address, port, forceTls, remark, client.password);
+            case Protocols.NAIVE:
+                return this.genNaiveLink(address, port, remark, client);
             case Protocols.HYSTERIA:
                 return this.genHysteriaLink(address, port, remark, client.auth.length > 0 ? client.auth : this.stream.hysteria.auth);
             default: return '';
@@ -2422,6 +2441,7 @@ Inbound.Settings = class extends XrayCommonClass {
             case Protocols.VLESS: return new Inbound.VLESSSettings(protocol);
             case Protocols.TROJAN: return new Inbound.TrojanSettings(protocol);
             case Protocols.SHADOWSOCKS: return new Inbound.ShadowsocksSettings(protocol);
+            case Protocols.NAIVE: return new Inbound.NaiveSettings(protocol);
             case Protocols.TUNNEL: return new Inbound.TunnelSettings(protocol);
             case Protocols.MIXED: return new Inbound.MixedSettings(protocol);
             case Protocols.HTTP: return new Inbound.HttpSettings(protocol);
@@ -2438,6 +2458,7 @@ Inbound.Settings = class extends XrayCommonClass {
             case Protocols.VLESS: return Inbound.VLESSSettings.fromJson(json);
             case Protocols.TROJAN: return Inbound.TrojanSettings.fromJson(json);
             case Protocols.SHADOWSOCKS: return Inbound.ShadowsocksSettings.fromJson(json);
+            case Protocols.NAIVE: return Inbound.NaiveSettings.fromJson(json);
             case Protocols.TUNNEL: return Inbound.TunnelSettings.fromJson(json);
             case Protocols.MIXED: return Inbound.MixedSettings.fromJson(json);
             case Protocols.HTTP: return Inbound.HttpSettings.fromJson(json);
@@ -2897,6 +2918,61 @@ Inbound.ShadowsocksSettings.Shadowsocks = class extends Inbound.ClientBase {
         return new Inbound.ShadowsocksSettings.Shadowsocks(
             json.method,
             json.password,
+            ...Inbound.ClientBase.commonArgsFromJson(json),
+        );
+    }
+};
+
+Inbound.NaiveSettings = class extends Inbound.Settings {
+    constructor(
+        protocol,
+        naives = [new Inbound.NaiveSettings.Naive()],
+        allowTransparent = false,
+    ) {
+        super(protocol);
+        this.naives = naives;
+        this.allowTransparent = allowTransparent;
+    }
+
+    static fromJson(json = {}) {
+        const clients = json.clients || (json.accounts || []).map(account => ({
+            email: account.user,
+            password: account.pass,
+        }));
+        return new Inbound.NaiveSettings(
+            Protocols.NAIVE,
+            clients.map(client => Inbound.NaiveSettings.Naive.fromJson(client)),
+            json.allowTransparent,
+        );
+    }
+
+    toJson() {
+        return {
+            clients: Inbound.NaiveSettings.toJsonArray(this.naives),
+            allowTransparent: this.allowTransparent,
+        };
+    }
+};
+
+Inbound.NaiveSettings.Naive = class extends Inbound.ClientBase {
+    constructor(
+        password = RandomUtil.randomSeq(10),
+        email, limitIp, totalGB, expiryTime, enable, tgId, subId, comment, reset, created_at, updated_at,
+    ) {
+        super(email, limitIp, totalGB, expiryTime, enable, tgId, subId, comment, reset, created_at, updated_at);
+        this.password = password;
+    }
+
+    toJson() {
+        return {
+            password: this.password,
+            ...this._clientBaseToJson(),
+        };
+    }
+
+    static fromJson(json = {}) {
+        return new Inbound.NaiveSettings.Naive(
+            json.password ?? json.pass,
             ...Inbound.ClientBase.commonArgsFromJson(json),
         );
     }
