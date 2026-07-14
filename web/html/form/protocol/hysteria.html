@@ -1,0 +1,86 @@
+{{define "form/hysteria"}}
+<a-collapse activeKey="0" v-for="(client, index) in inbound.settings.hysterias.slice(0,1)" v-if="!isEdit">
+  <a-collapse-panel header='Client'>
+    {{template "form/client"}}
+  </a-collapse-panel>
+</a-collapse>
+
+<a-form :colon="false" :label-col="{ md: {span:8} }" :wrapper-col="{ md: {span:14} }">
+  <a-form-item label="Version">
+    <a-input-number v-model.number="inbound.settings.version" :min="2" :max="2" disabled></a-input-number>
+  </a-form-item>
+  <a-form-item label="UDP Idle Timeout">
+    <a-input-number v-model.number="inbound.stream.hysteria.udpIdleTimeout" :min="2" :max="600"></a-input-number>
+  </a-form-item>
+  <a-form-item label="Masquerade">
+    <a-switch v-model="inbound.stream.hysteria.masqueradeSwitch"></a-switch>
+  </a-form-item>
+  <template v-if="inbound.stream.hysteria.masquerade">
+    <a-form-item label="Type">
+      <a-select v-model="inbound.stream.hysteria.masquerade.type" :dropdown-class-name="themeSwitcher.currentTheme">
+        <a-select-option value="">default (404 page)</a-select-option>
+        <a-select-option value="proxy">proxy</a-select-option>
+        <a-select-option value="file">file</a-select-option>
+        <a-select-option value="string">string</a-select-option>
+      </a-select>
+    </a-form-item>
+    <template v-if="inbound.stream.hysteria.masquerade.type === 'proxy'">
+      <a-form-item label="Upstream URL">
+        <a-input v-model.trim="inbound.stream.hysteria.masquerade.url" placeholder="https://www.example.com"></a-input>
+      </a-form-item>
+      <a-form-item label="Rewrite Host">
+        <a-switch v-model="inbound.stream.hysteria.masquerade.rewriteHost"></a-switch>
+      </a-form-item>
+      <a-form-item label="Skip TLS Verify">
+        <a-switch v-model="inbound.stream.hysteria.masquerade.insecure"></a-switch>
+      </a-form-item>
+    </template>
+    <template v-if="inbound.stream.hysteria.masquerade.type === 'file'">
+      <a-form-item label="Directory">
+        <a-input v-model.trim="inbound.stream.hysteria.masquerade.dir" placeholder="/var/www/html"></a-input>
+      </a-form-item>
+    </template>
+    <template v-if="inbound.stream.hysteria.masquerade.type === 'string'">
+      <a-form-item label="Status Code">
+        <a-input-number v-model.number="inbound.stream.hysteria.masquerade.statusCode" :min="0" :max="599"></a-input-number>
+      </a-form-item>
+      <a-form-item label="Body">
+        <a-textarea v-model="inbound.stream.hysteria.masquerade.content" :auto-size="{ minRows: 3 }"></a-textarea>
+      </a-form-item>
+      <a-form-item label="Headers">
+        <a-button icon="plus" type="primary" size="small" @click="inbound.stream.hysteria.masquerade.headers.push({ name: '', value: '' })"></a-button>
+      </a-form-item>
+      <template v-for="(header, index) in inbound.stream.hysteria.masquerade.headers">
+        <a-form-item label=" ">
+          <a-input-group compact>
+            <a-input v-model.trim="header.name" placeholder="Header" :style="{ width: '45%' }"></a-input>
+            <a-input v-model.trim="header.value" placeholder="Value" :style="{ width: '45%' }"></a-input>
+            <a-button icon="minus" @click="inbound.stream.hysteria.masquerade.headers.splice(index, 1)"></a-button>
+          </a-input-group>
+        </a-form-item>
+      </template>
+    </template>
+  </template>
+</a-form>
+
+<a-collapse v-if="isEdit">
+  <a-collapse-panel :header="'{{ i18n "pages.client.clientCount"}} : ' + inbound.settings.hysterias.length">
+    <table style="width: 100%">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Auth</th>
+          <th>Subscription</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(client, index) in inbound.settings.hysterias" :class="index % 2 == 1 ? 'client-table-odd-row' : ''">
+          <td>[[ client.email ]]</td>
+          <td>[[ client.auth ]]</td>
+          <td>[[ client.subId ]]</td>
+        </tr>
+      </tbody>
+    </table>
+  </a-collapse-panel>
+</a-collapse>
+{{end}}

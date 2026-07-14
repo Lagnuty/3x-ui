@@ -179,6 +179,10 @@ func validateClientForInbound(client *model.Client, inbound *model.Inbound) erro
 		if client.Email == "" {
 			return common.NewError("empty client email for shadowsocks inbound")
 		}
+	case "hysteria":
+		if client.Auth == "" {
+			return common.NewError("empty client auth for hysteria inbound")
+		}
 	default:
 		if client.ID == "" {
 			return common.NewError("empty client id")

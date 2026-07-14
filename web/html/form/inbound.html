@@ -12,8 +12,7 @@
     <a-form-item label='{{ i18n "protocol" }}'>
         <a-select v-model="inbound.protocol" :disabled="isEdit"
             :dropdown-class-name="themeSwitcher.currentTheme">
-            <a-select-option v-for="p in Protocols" :key="p" :value="p">[[ p
-                ]]</a-select-option>
+            <a-select-option v-for="p in Protocols" :key="p" :value="p">[[ p === Protocols.HYSTERIA ? 'hysteria2' : p ]]</a-select-option>
         </a-select>
     </a-form-item>
 
@@ -145,6 +144,12 @@
 <!-- wireguard -->
 <template v-if="inbound.protocol === Protocols.WIREGUARD">
     {{template "form/wireguard"}}
+</template>
+
+<!-- hysteria2 -->
+<template v-if="inbound.protocol === Protocols.HYSTERIA">
+    {{template "form/hysteria"}}
+    {{template "form/externalProxy" }}
 </template>
 
 <!-- tun -->

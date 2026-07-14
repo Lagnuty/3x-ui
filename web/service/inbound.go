@@ -270,6 +270,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client ID")
 			}
+		case "hysteria":
+			if client.Auth == "" {
+				return inbound, false, common.NewError("empty client ID")
+			}
 		default:
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
@@ -618,6 +622,10 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 			if client.Email == "" {
 				return false, common.NewError("empty client ID")
 			}
+		case "hysteria":
+			if client.Auth == "" {
+				return false, common.NewError("empty client ID")
+			}
 		default:
 			if client.ID == "" {
 				return false, common.NewError("empty client ID")
@@ -670,6 +678,7 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 					"security": client.Security,
 					"flow":     client.Flow,
 					"password": client.Password,
+					"auth":     client.Auth,
 					"cipher":   cipher,
 				})
 				if err1 == nil {
@@ -712,6 +721,9 @@ func (s *InboundService) DelInboundClient(inboundId int, clientId string) (bool,
 	}
 	if oldInbound.Protocol == "shadowsocks" {
 		client_key = "email"
+	}
+	if oldInbound.Protocol == "hysteria" {
+		client_key = "auth"
 	}
 
 	interfaceClients := settings["clients"].([]any)
@@ -823,6 +835,9 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 		case "shadowsocks":
 			oldClientId = oldClient.Email
 			newClientId = clients[0].Email
+		case "hysteria":
+			oldClientId = oldClient.Auth
+			newClientId = clients[0].Auth
 		default:
 			oldClientId = oldClient.ID
 			newClientId = clients[0].ID
@@ -951,6 +966,7 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 				"security": clients[0].Security,
 				"flow":     clients[0].Flow,
 				"password": clients[0].Password,
+				"auth":     clients[0].Auth,
 				"cipher":   cipher,
 			})
 			if err1 == nil {
@@ -1850,6 +1866,7 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 					"security": client.Security,
 					"flow":     client.Flow,
 					"password": client.Password,
+					"auth":     client.Auth,
 					"cipher":   cipher,
 				})
 				if err1 == nil {
