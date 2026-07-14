@@ -1282,6 +1282,16 @@ class Inbound extends XrayCommonClass {
         this._protocol = protocol;
         this.settings = ObjectUtil.isEmpty(settings) ? Inbound.Settings.getSettings(protocol) : settings;
         this.stream = streamSettings;
+        if (protocol === Protocols.HYSTERIA) {
+            this.stream.network = 'hysteria';
+            this.stream.security = 'tls';
+            if (!this.stream.hysteria) {
+                this.stream.hysteria = new HysteriaStreamSettings();
+            }
+            if (!this.stream.tls.alpn || this.stream.tls.alpn.length === 0) {
+                this.stream.tls.alpn = ['h3'];
+            }
+        }
         this.tag = tag;
         this.sniffing = sniffing;
         this.clientStats = clientStats;

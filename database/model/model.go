@@ -235,6 +235,7 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 	listen = fmt.Sprintf("\"%v\"", listen)
 	protocol := string(i.Protocol)
 	settings := i.Settings
+	streamSettings := i.StreamSettings
 	switch i.Protocol {
 	case Shadowsocks:
 		if healed, ok := HealShadowsocksClientMethods(settings); ok {
@@ -248,16 +249,66 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 		if stripped, ok := StripVlessInboundEncryption(settings); ok {
 			settings = stripped
 		}
+	case Hysteria:
+		if normalized, ok := NormalizeHysteriaStreamSettings(streamSettings); ok {
+			streamSettings = normalized
+		}
 	}
 	return &xray.InboundConfig{
 		Listen:         json_util.RawMessage(listen),
 		Port:           i.Port,
 		Protocol:       protocol,
 		Settings:       json_util.RawMessage(settings),
-		StreamSettings: json_util.RawMessage(i.StreamSettings),
+		StreamSettings: json_util.RawMessage(streamSettings),
 		Tag:            i.Tag,
 		Sniffing:       json_util.RawMessage(i.Sniffing),
 	}
+}
+
+func NormalizeHysteriaStreamSettings(streamSettings string) (string, bool) {
+	var parsed map[string]any
+	if strings.TrimSpace(streamSettings) != "" {
+		if err := json.Unmarshal([]byte(streamSettings), &parsed); err != nil {
+			return streamSettings, false
+		}
+	}
+	if parsed == nil {
+		parsed = map[string]any{}
+	}
+
+	changed := false
+	if parsed["network"] != "hysteria" {
+		parsed["network"] = "hysteria"
+		changed = true
+	}
+	if parsed["security"] != "tls" {
+		parsed["security"] = "tls"
+		changed = true
+	}
+
+	hysteriaSettings, ok := parsed["hysteriaSettings"].(map[string]any)
+	if !ok {
+		hysteriaSettings = map[string]any{}
+		parsed["hysteriaSettings"] = hysteriaSettings
+		changed = true
+	}
+	if hysteriaSettings["version"] != float64(2) && hysteriaSettings["version"] != 2 {
+		hysteriaSettings["version"] = 2
+		changed = true
+	}
+	if _, ok := hysteriaSettings["udpIdleTimeout"]; !ok {
+		hysteriaSettings["udpIdleTimeout"] = 60
+		changed = true
+	}
+
+	if !changed {
+		return streamSettings, false
+	}
+	out, err := json.MarshalIndent(parsed, "", "  ")
+	if err != nil {
+		return streamSettings, false
+	}
+	return string(out), true
 }
 
 func StripVmessClientSecurity(settings string) (string, bool) {
