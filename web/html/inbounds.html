@@ -748,19 +748,20 @@
       },
       async getDBInbounds() {
         this.refreshing = true;
-        const msg = await HttpUtil.get('/panel/api/inbounds/list');
-        if (!msg.success) {
+        try {
+          const msg = await HttpUtil.get('/panel/api/inbounds/list');
+          if (!msg.success) {
+            return;
+          }
+
+          this.setInbounds(msg.obj);
+          this.getLastOnlineMap().catch(err => console.warn('lastOnline load failed', err));
+          this.getOnlineUsers().catch(err => console.warn('online users load failed', err));
+        } catch (err) {
+          console.error('inbounds load failed', err);
+        } finally {
           this.refreshing = false;
-          return;
         }
-
-        await this.getLastOnlineMap();
-        await this.getOnlineUsers();
-
-        this.setInbounds(msg.obj);
-        setTimeout(() => {
-          this.refreshing = false;
-        }, 500);
       },
       async getOnlineUsers() {
         const msg = await HttpUtil.post('/panel/api/inbounds/onlines');
@@ -803,15 +804,19 @@
         this.dbInbounds.splice(0);
         this.clientCount.splice(0);
         for (const inbound of dbInbounds) {
-          const dbInbound = new DBInbound(inbound);
-          to_inbound = dbInbound.toInbound()
-          this.inbounds.push(to_inbound);
-          this.dbInbounds.push(dbInbound);
-          if ([Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS, Protocols.HYSTERIA].includes(inbound.protocol)) {
-            if (dbInbound.isSS && (!to_inbound.isSSMultiUser)) {
-              continue;
+          try {
+            const dbInbound = new DBInbound(inbound);
+            to_inbound = dbInbound.toInbound()
+            this.inbounds.push(to_inbound);
+            this.dbInbounds.push(dbInbound);
+            if ([Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS, Protocols.HYSTERIA].includes(inbound.protocol)) {
+              if (dbInbound.isSS && (!to_inbound.isSSMultiUser)) {
+                continue;
+              }
+              this.clientCount[inbound.id] = this.getClientCounts(inbound, to_inbound);
             }
-            this.clientCount[inbound.id] = this.getClientCounts(inbound, to_inbound);
+          } catch (err) {
+            console.error('failed to parse inbound', inbound, err);
           }
         }
         if (!this.loadingStates.fetched) {
