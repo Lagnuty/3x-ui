@@ -1079,6 +1079,10 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		return nil
 	}
 
+	if err = s.normalizeClientTrafficEmails(tx, traffics); err != nil {
+		return err
+	}
+
 	onlineClients := make([]string, 0)
 
 	emails := make([]string, 0, len(traffics))
@@ -1091,8 +1095,22 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		return err
 	}
 
-	// Avoid empty slice error
+	created, err := s.ensureClientTrafficRows(tx, traffics, dbClientTraffics)
+	if err != nil {
+		return err
+	}
+	if created {
+		dbClientTraffics = dbClientTraffics[:0]
+		err = tx.Model(xray.ClientTraffic{}).Where("email IN (?)", emails).Find(&dbClientTraffics).Error
+		if err != nil {
+			return err
+		}
+	}
+
 	if len(dbClientTraffics) == 0 {
+		if p != nil {
+			p.SetOnlineClients(onlineClients)
+		}
 		return nil
 	}
 
@@ -1127,6 +1145,94 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 	}
 
 	return nil
+}
+
+func (s *InboundService) normalizeClientTrafficEmails(tx *gorm.DB, traffics []*xray.ClientTraffic) error {
+	ids := make(map[string]struct{}, len(traffics))
+	for _, traffic := range traffics {
+		if traffic.Email != "" {
+			ids[traffic.Email] = struct{}{}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var inbounds []*model.Inbound
+	err := tx.Model(model.Inbound{}).Where("protocol = ?", "hysteria").Find(&inbounds).Error
+	if err != nil {
+		return err
+	}
+
+	authToEmail := make(map[string]string)
+	for _, inbound := range inbounds {
+		clients, err := s.GetClients(inbound)
+		if err != nil {
+			return err
+		}
+		for _, client := range clients {
+			if client.Auth != "" && client.Email != "" {
+				authToEmail[client.Auth] = client.Email
+			}
+		}
+	}
+
+	for _, traffic := range traffics {
+		if email := authToEmail[traffic.Email]; email != "" {
+			traffic.Email = email
+		}
+	}
+	return nil
+}
+
+func (s *InboundService) ensureClientTrafficRows(tx *gorm.DB, traffics []*xray.ClientTraffic, existing []*xray.ClientTraffic) (bool, error) {
+	exists := make(map[string]struct{}, len(existing))
+	for _, traffic := range existing {
+		exists[traffic.Email] = struct{}{}
+	}
+
+	missing := make(map[string]struct{})
+	for _, traffic := range traffics {
+		if traffic.Email == "" {
+			continue
+		}
+		if _, ok := exists[traffic.Email]; !ok {
+			missing[traffic.Email] = struct{}{}
+		}
+	}
+	if len(missing) == 0 {
+		return false, nil
+	}
+
+	var inbounds []*model.Inbound
+	err := tx.Model(model.Inbound{}).Where("protocol IN (?)", []string{"vmess", "vless", "trojan", "shadowsocks", "hysteria"}).Find(&inbounds).Error
+	if err != nil {
+		return false, err
+	}
+
+	created := false
+	for _, inbound := range inbounds {
+		clients, err := s.GetClients(inbound)
+		if err != nil {
+			return false, err
+		}
+		for _, client := range clients {
+			if _, ok := missing[client.Email]; !ok || client.Email == "" {
+				continue
+			}
+			if err := s.AddClientStat(tx, inbound.Id, &client); err != nil {
+				return false, err
+			}
+			exists[client.Email] = struct{}{}
+			delete(missing, client.Email)
+			created = true
+		}
+		if len(missing) == 0 {
+			break
+		}
+	}
+
+	return created, nil
 }
 
 func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*xray.ClientTraffic) ([]*xray.ClientTraffic, error) {
