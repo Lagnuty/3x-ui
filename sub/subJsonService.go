@@ -194,6 +194,8 @@ func (s *SubJsonService) getConfig(inbound *model.Inbound, client model.Client, 
 			newOutbounds = append(newOutbounds, s.genVless(inbound, streamSettings, client))
 		case "trojan", "shadowsocks":
 			newOutbounds = append(newOutbounds, s.genServer(inbound, streamSettings, client))
+		case "hysteria":
+			newOutbounds = append(newOutbounds, s.genHysteria(inbound, newStream, client))
 		}
 
 		newOutbounds = append(newOutbounds, s.defaultOutbounds...)
@@ -213,12 +215,19 @@ func (s *SubJsonService) getConfig(inbound *model.Inbound, client model.Client, 
 func (s *SubJsonService) streamData(stream string) map[string]any {
 	var streamSettings map[string]any
 	json.Unmarshal([]byte(stream), &streamSettings)
+	if streamSettings == nil {
+		streamSettings = map[string]any{}
+	}
 	security, _ := streamSettings["security"].(string)
 	switch security {
 	case "tls":
-		streamSettings["tlsSettings"] = s.tlsData(streamSettings["tlsSettings"].(map[string]any))
+		if tlsSettings, ok := streamSettings["tlsSettings"].(map[string]any); ok {
+			streamSettings["tlsSettings"] = s.tlsData(tlsSettings)
+		}
 	case "reality":
-		streamSettings["realitySettings"] = s.realityData(streamSettings["realitySettings"].(map[string]any))
+		if realitySettings, ok := streamSettings["realitySettings"].(map[string]any); ok {
+			streamSettings["realitySettings"] = s.realityData(realitySettings)
+		}
 	}
 	delete(streamSettings, "sockopt")
 
@@ -375,6 +384,45 @@ func (s *SubJsonService) genServer(inbound *model.Inbound, streamSettings json_u
 	outbound.StreamSettings = streamSettings
 	outbound.Settings = map[string]any{
 		"servers": serverData,
+	}
+
+	result, _ := json.MarshalIndent(outbound, "", "  ")
+	return result
+}
+
+func (s *SubJsonService) genHysteria(inbound *model.Inbound, stream map[string]any, client model.Client) json_util.RawMessage {
+	outbound := Outbound{}
+	outbound.Protocol = string(inbound.Protocol)
+	outbound.Tag = "proxy"
+	if s.mux != "" {
+		outbound.Mux = json_util.RawMessage(s.mux)
+	}
+
+	var settings map[string]any
+	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
+	version := 2
+	if v, ok := settings["version"].(float64); ok && int(v) > 0 {
+		version = int(v)
+	}
+
+	hysteriaSettings, _ := stream["hysteriaSettings"].(map[string]any)
+	if hysteriaSettings == nil {
+		hysteriaSettings = map[string]any{}
+	}
+	hysteriaSettings["version"] = version
+	hysteriaSettings["auth"] = client.Auth
+	if _, ok := hysteriaSettings["udpIdleTimeout"]; !ok {
+		hysteriaSettings["udpIdleTimeout"] = 60
+	}
+	stream["hysteriaSettings"] = hysteriaSettings
+	stream["network"] = "hysteria"
+	stream["security"] = "tls"
+
+	outbound.StreamSettings, _ = json.MarshalIndent(stream, "", "  ")
+	outbound.Settings = map[string]any{
+		"address": inbound.Listen,
+		"port":    inbound.Port,
+		"version": version,
 	}
 
 	result, _ := json.MarshalIndent(outbound, "", "  ")

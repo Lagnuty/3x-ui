@@ -120,7 +120,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		FROM inbounds,
 			JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client 
 		WHERE
-			protocol in ('vmess','vless','trojan','shadowsocks')
+			protocol in ('vmess','vless','trojan','shadowsocks','hysteria')
 			AND JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
 	)`, subId, true).Find(&inbounds).Error
 	if err != nil {
@@ -171,6 +171,8 @@ func (s *SubService) getLink(inbound *model.Inbound, email string) string {
 		return s.genTrojanLink(inbound, email)
 	case "shadowsocks":
 		return s.genShadowsocksLink(inbound, email)
+	case "hysteria":
+		return s.genHysteriaLink(inbound, email)
 	}
 	return ""
 }
@@ -883,6 +885,117 @@ func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) st
 
 	url.Fragment = s.genRemark(inbound, email, "")
 	return url.String()
+}
+
+func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.Hysteria {
+		return ""
+	}
+	var address string
+	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
+		address = s.address
+	} else {
+		address = inbound.Listen
+	}
+
+	var stream map[string]any
+	_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+	if stream == nil {
+		stream = map[string]any{}
+	}
+	clients, _ := s.inboundService.GetClients(inbound)
+	clientIndex := -1
+	for i, client := range clients {
+		if client.Email == email {
+			clientIndex = i
+			break
+		}
+	}
+	if clientIndex < 0 || clients[clientIndex].Auth == "" {
+		return ""
+	}
+
+	var settings map[string]any
+	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
+	version := 2
+	if v, ok := settings["version"].(float64); ok && int(v) == 1 {
+		version = 1
+	}
+	scheme := "hysteria2"
+	if version == 1 {
+		scheme = "hysteria"
+	}
+
+	params := make(map[string]string)
+	params["security"] = "tls"
+	if tlsSetting, ok := stream["tlsSettings"].(map[string]any); ok {
+		if alpns, ok := tlsSetting["alpn"].([]any); ok {
+			alpn := make([]string, 0, len(alpns))
+			for _, a := range alpns {
+				if s, ok := a.(string); ok && s != "" {
+					alpn = append(alpn, s)
+				}
+			}
+			if len(alpn) > 0 {
+				params["alpn"] = strings.Join(alpn, ",")
+			}
+		}
+		if sniValue, ok := searchKey(tlsSetting, "serverName"); ok {
+			if sni, _ := sniValue.(string); sni != "" {
+				params["sni"] = sni
+			}
+		}
+		if tlsSettings, ok := searchKey(tlsSetting, "settings"); ok {
+			if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
+				if fp, _ := fpValue.(string); fp != "" {
+					params["fp"] = fp
+				}
+			}
+			if echValue, ok := searchKey(tlsSettings, "echConfigList"); ok {
+				if ech, _ := echValue.(string); ech != "" {
+					params["ech"] = ech
+				}
+			}
+		}
+	}
+
+	auth := url.User(clients[clientIndex].Auth).String()
+	externalProxies, _ := stream["externalProxy"].([]any)
+	if len(externalProxies) > 0 {
+		links := ""
+		for index, externalProxy := range externalProxies {
+			ep, _ := externalProxy.(map[string]any)
+			dest, _ := ep["dest"].(string)
+			portF, ok := ep["port"].(float64)
+			if dest == "" || !ok {
+				continue
+			}
+			link := fmt.Sprintf("%s://%s@%s:%d", scheme, auth, dest, int(portF))
+			u, _ := url.Parse(link)
+			q := u.Query()
+			for k, v := range params {
+				q.Set(k, v)
+			}
+			u.RawQuery = q.Encode()
+			remark, _ := ep["remark"].(string)
+			u.Fragment = s.genRemark(inbound, email, remark)
+			if index > 0 {
+				links += "\n"
+			}
+			links += u.String()
+		}
+		return links
+	}
+
+	link := fmt.Sprintf("%s://%s@%s:%d", scheme, auth, address, inbound.Port)
+	u, _ := url.Parse(link)
+	q := u.Query()
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+	u.Fragment = s.genRemark(inbound, email, "")
+	return u.String()
 }
 
 func (s *SubService) genRemark(inbound *model.Inbound, email string, extra string) string {
