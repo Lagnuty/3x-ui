@@ -668,6 +668,10 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 		if len(client.Email) > 0 {
 			s.AddClientStat(tx, data.Id, &client)
 			if client.Enable {
+				if oldInbound.Protocol == "hysteria" {
+					needRestart = true
+					continue
+				}
 				cipher := ""
 				if oldInbound.Protocol == "shadowsocks" {
 					cipher = oldSettings["method"].(string)
@@ -956,6 +960,16 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 			}
 		}
 		if clients[0].Enable {
+			if oldInbound.Protocol == "hysteria" {
+				needRestart = true
+				s.xrayApi.Close()
+				err = tx.Save(oldInbound).Error
+				if err != nil {
+					return needRestart, err
+				}
+				err = syncInboundClientsFromSettings(tx, oldInbound)
+				return needRestart, err
+			}
 			cipher := ""
 			if oldInbound.Protocol == "shadowsocks" {
 				cipher = oldSettings["method"].(string)
@@ -1850,6 +1864,10 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 		}
 		for _, client := range clients {
 			if client.Email == clientEmail && client.Enable {
+				if inbound.Protocol == "hysteria" {
+					needRestart = true
+					break
+				}
 				s.xrayApi.Init(p.GetAPIPort())
 				cipher := ""
 				if string(inbound.Protocol) == "shadowsocks" {
