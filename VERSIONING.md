@@ -34,3 +34,10 @@ Docker Compose:
 XUI_REPO=https://github.com/Lagnuty/3x-ui.git XUI_REF=3xui \
 docker compose -f docker-compose.remote.yml up -d --build
 ```
+
+Fast Docker run from the prebuilt GitHub Container Registry image:
+
+```bash
+docker compose -f docker-compose.image.yml pull
+docker compose -f docker-compose.image.yml up -d
+```
