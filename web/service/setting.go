@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -229,6 +230,64 @@ func (s *SettingService) saveSetting(key string, value string) error {
 	setting.Key = key
 	setting.Value = value
 	return db.Save(setting).Error
+}
+
+// ApplyEnvironmentOverrides persists Docker-friendly environment overrides
+// before servers bind their listeners. This keeps the old UI and database as
+// the source of truth while allowing first boot configuration from compose.
+func (s *SettingService) ApplyEnvironmentOverrides() error {
+	overrides := map[string]string{
+		"XUI_WEB_LISTEN":      "webListen",
+		"XUI_WEB_PORT":        "webPort",
+		"XUI_WEB_BASE_PATH":   "webBasePath",
+		"XUI_SUB_ENABLE":      "subEnable",
+		"XUI_SUB_LISTEN":      "subListen",
+		"XUI_SUB_PORT":        "subPort",
+		"XUI_SUB_PATH":        "subPath",
+		"XUI_SUB_JSON_PATH":   "subJsonPath",
+		"XUI_SUB_DOMAIN":      "subDomain",
+		"XUI_SUB_URI":         "subURI",
+		"XUI_SUB_JSON_URI":    "subJsonURI",
+		"XUI_SUB_JSON_ENABLE": "subJsonEnable",
+	}
+	for envName, key := range overrides {
+		value, ok := os.LookupEnv(envName)
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if err := validateEnvironmentOverride(key, value); err != nil {
+			return common.NewErrorf("%s invalid: %v", envName, err)
+		}
+		if err := s.saveSetting(key, value); err != nil {
+			return err
+		}
+		logger.Infof("Applied %s to setting %s", envName, key)
+	}
+	return nil
+}
+
+func validateEnvironmentOverride(key string, value string) error {
+	switch key {
+	case "webPort", "subPort":
+		port, err := strconv.Atoi(value)
+		if err != nil || port <= 0 || port > 65535 {
+			return common.NewError("port must be 1..65535")
+		}
+	case "subEnable", "subJsonEnable":
+		if _, err := strconv.ParseBool(value); err != nil {
+			return common.NewError("boolean must be true or false")
+		}
+	case "webListen", "subListen":
+		if value != "" && net.ParseIP(value) == nil {
+			return common.NewError("listen address must be empty or a valid IP")
+		}
+	case "webBasePath", "subPath", "subJsonPath":
+		if value == "" {
+			return common.NewError("path cannot be empty")
+		}
+	}
+	return nil
 }
 
 func (s *SettingService) getString(key string) (string, error) {

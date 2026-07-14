@@ -50,6 +50,10 @@ func runWebServer() {
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
+	settingService := service.SettingService{}
+	if err := settingService.ApplyEnvironmentOverrides(); err != nil {
+		log.Fatalf("Error applying environment settings: %v", err)
+	}
 
 	var server *web.Server
 	server = web.NewServer()

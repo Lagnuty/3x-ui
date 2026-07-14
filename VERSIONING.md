@@ -41,3 +41,15 @@ Fast Docker run from the prebuilt GitHub Container Registry image:
 docker compose -f docker-compose.image.yml pull
 docker compose -f docker-compose.image.yml up -d
 ```
+
+Ports can be changed from compose variables:
+
+```bash
+XUI_WEB_PORT=2053 XUI_SUB_PORT=2097 docker compose -f docker-compose.image.yml up -d
+```
+
+To disable the subscription server:
+
+```bash
+XUI_SUB_ENABLE=false docker compose -f docker-compose.image.yml up -d
+```
