@@ -94,21 +94,20 @@ class DBInbound {
         return this.expiryTime < new Date().getTime();
     }
 
+    parseJsonField(value) {
+        if (ObjectUtil.isEmpty(value)) {
+            return {};
+        }
+        if (typeof value === 'string') {
+            return JSON.parse(value);
+        }
+        return ObjectUtil.clone(value);
+    }
+
     toInbound() {
-        let settings = {};
-        if (!ObjectUtil.isEmpty(this.settings)) {
-            settings = JSON.parse(this.settings);
-        }
-
-        let streamSettings = {};
-        if (!ObjectUtil.isEmpty(this.streamSettings)) {
-            streamSettings = JSON.parse(this.streamSettings);
-        }
-
-        let sniffing = {};
-        if (!ObjectUtil.isEmpty(this.sniffing)) {
-            sniffing = JSON.parse(this.sniffing);
-        }
+        const settings = this.parseJsonField(this.settings);
+        const streamSettings = this.parseJsonField(this.streamSettings);
+        const sniffing = this.parseJsonField(this.sniffing);
 
         const config = {
             port: this.port,

@@ -883,7 +883,7 @@
           this.dbInbounds.forEach(inbound => {
             if (ObjectUtil.deepSearch(inbound, key)) {
               const newInbound = new DBInbound(inbound);
-              const inboundSettings = JSON.parse(inbound.settings);
+              const inboundSettings = typeof inbound.settings === 'string' ? JSON.parse(inbound.settings) : ObjectUtil.clone(inbound.settings || {});
               if (inboundSettings.hasOwnProperty('clients')) {
                 const searchedSettings = { "clients": [] };
                 inboundSettings.clients.forEach(client => {
@@ -905,7 +905,7 @@
           this.searchedInbounds.splice(0, this.searchedInbounds.length);
           this.dbInbounds.forEach(inbound => {
             const newInbound = new DBInbound(inbound);
-            const inboundSettings = JSON.parse(inbound.settings);
+            const inboundSettings = typeof inbound.settings === 'string' ? JSON.parse(inbound.settings) : ObjectUtil.clone(inbound.settings || {});
             if (this.clientCount[inbound.id] && this.clientCount[inbound.id].hasOwnProperty(this.filterBy)) {
               const list = this.clientCount[inbound.id][this.filterBy];
               if (list.length > 0) {
