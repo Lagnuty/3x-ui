@@ -12,6 +12,8 @@ services:
       XUI_WEB_PORT: "${XUI_WEB_PORT:-2053}"
       XUI_SUB_PORT: "${XUI_SUB_PORT:-2097}"
       XUI_SUB_ENABLE: "${XUI_SUB_ENABLE:-true}"
+      XUI_XRAY_METRICS_PORT: "${XUI_XRAY_METRICS_PORT:-11112}"
+      XUI_XRAY_API_PORT: "${XUI_XRAY_API_PORT:-62789}"
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
     tty: true

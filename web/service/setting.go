@@ -264,15 +264,85 @@ func (s *SettingService) ApplyEnvironmentOverrides() error {
 		}
 		logger.Infof("Applied %s to setting %s", envName, key)
 	}
+	if err := s.applyXrayTemplateEnvironmentOverrides(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *SettingService) applyXrayTemplateEnvironmentOverrides() error {
+	apiPort, hasAPI := os.LookupEnv("XUI_XRAY_API_PORT")
+	metricsPort, hasMetrics := os.LookupEnv("XUI_XRAY_METRICS_PORT")
+	if !hasAPI && !hasMetrics {
+		return nil
+	}
+
+	templateConfig, err := s.GetXrayConfigTemplate()
+	if err != nil {
+		return err
+	}
+	cfg := map[string]any{}
+	if err := json.Unmarshal([]byte(templateConfig), &cfg); err != nil {
+		return err
+	}
+
+	changed := false
+	if hasAPI {
+		port, err := parseEnvironmentPort("XUI_XRAY_API_PORT", apiPort)
+		if err != nil {
+			return err
+		}
+		if inbounds, ok := cfg["inbounds"].([]any); ok {
+			for _, item := range inbounds {
+				inbound, ok := item.(map[string]any)
+				if !ok || inbound["tag"] != "api" {
+					continue
+				}
+				inbound["port"] = float64(port)
+				changed = true
+				logger.Infof("Applied XUI_XRAY_API_PORT to Xray API inbound: %d", port)
+				break
+			}
+		}
+	}
+	if hasMetrics {
+		port, err := parseEnvironmentPort("XUI_XRAY_METRICS_PORT", metricsPort)
+		if err != nil {
+			return err
+		}
+		metrics, ok := cfg["metrics"].(map[string]any)
+		if !ok {
+			metrics = map[string]any{}
+			cfg["metrics"] = metrics
+		}
+		metrics["listen"] = fmt.Sprintf("127.0.0.1:%d", port)
+		changed = true
+		logger.Infof("Applied XUI_XRAY_METRICS_PORT to Xray metrics listen: %d", port)
+	}
+	if !changed {
+		return nil
+	}
+
+	updated, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return s.saveSetting("xrayTemplateConfig", string(updated))
+}
+
+func parseEnvironmentPort(name string, value string) (int, error) {
+	port, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || port <= 0 || port > 65535 {
+		return 0, common.NewErrorf("%s must be 1..65535", name)
+	}
+	return port, nil
 }
 
 func validateEnvironmentOverride(key string, value string) error {
 	switch key {
 	case "webPort", "subPort":
-		port, err := strconv.Atoi(value)
-		if err != nil || port <= 0 || port > 65535 {
-			return common.NewError("port must be 1..65535")
+		if _, err := parseEnvironmentPort(key, value); err != nil {
+			return err
 		}
 	case "subEnable", "subJsonEnable":
 		if _, err := strconv.ParseBool(value); err != nil {

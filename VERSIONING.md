@@ -45,7 +45,7 @@ docker compose -f docker-compose.image.yml up -d
 Ports can be changed from compose variables:
 
 ```bash
-XUI_WEB_PORT=2053 XUI_SUB_PORT=2097 docker compose -f docker-compose.image.yml up -d
+XUI_WEB_PORT=2053 XUI_SUB_PORT=2097 XUI_XRAY_METRICS_PORT=11112 docker compose -f docker-compose.image.yml up -d
 ```
 
 To disable the subscription server:
