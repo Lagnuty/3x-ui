@@ -294,6 +294,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 				s.AddClientStat(tx, inbound.Id, &client)
 			}
 		}
+		err = syncInboundClientsFromSettings(tx, inbound)
+		if err != nil {
+			return inbound, false, err
+		}
 	} else {
 		return inbound, false, err
 	}
@@ -360,6 +364,9 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+	}
+	if err := db.Where("inbound_id = ?", id).Delete(&model.ClientInbound{}).Error; err != nil {
+		return false, err
 	}
 
 	return needRestart, db.Delete(model.Inbound{}, id).Error
@@ -510,7 +517,12 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 	s.xrayApi.Close()
 
-	return inbound, needRestart, tx.Save(oldInbound).Error
+	err = tx.Save(oldInbound).Error
+	if err != nil {
+		return inbound, needRestart, err
+	}
+	err = syncInboundClientsFromSettings(tx, oldInbound)
+	return inbound, needRestart, err
 }
 
 func (s *InboundService) updateClientTraffics(tx *gorm.DB, oldInbound *model.Inbound, newInbound *model.Inbound) error {
@@ -673,7 +685,12 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 	}
 	s.xrayApi.Close()
 
-	return needRestart, tx.Save(oldInbound).Error
+	err = tx.Save(oldInbound).Error
+	if err != nil {
+		return needRestart, err
+	}
+	err = syncInboundClientsFromSettings(tx, oldInbound)
+	return needRestart, err
 }
 
 func (s *InboundService) DelInboundClient(inboundId int, clientId string) (bool, error) {
@@ -761,7 +778,12 @@ func (s *InboundService) DelInboundClient(inboundId int, clientId string) (bool,
 			s.xrayApi.Close()
 		}
 	}
-	return needRestart, db.Save(oldInbound).Error
+	err = db.Save(oldInbound).Error
+	if err != nil {
+		return needRestart, err
+	}
+	err = syncInboundClientsFromSettings(db, oldInbound)
+	return needRestart, err
 }
 
 func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId string) (bool, error) {
@@ -835,10 +857,14 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 	settingsClients := oldSettings["clients"].([]any)
 	// Preserve created_at and set updated_at for the replacing client
 	var preservedCreated any
+	var preservedGroup any
 	if clientIndex >= 0 && clientIndex < len(settingsClients) {
 		if oldMap, ok := settingsClients[clientIndex].(map[string]any); ok {
 			if v, ok2 := oldMap["created_at"]; ok2 {
 				preservedCreated = v
+			}
+			if v, ok2 := oldMap["group"]; ok2 {
+				preservedGroup = v
 			}
 		}
 	}
@@ -848,6 +874,9 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 				preservedCreated = time.Now().Unix() * 1000
 			}
 			newMap["created_at"] = preservedCreated
+			if _, hasGroup := newMap["group"]; !hasGroup && preservedGroup != nil {
+				newMap["group"] = preservedGroup
+			}
 			newMap["updated_at"] = time.Now().Unix() * 1000
 			interfaceClients[0] = newMap
 		}
@@ -936,7 +965,12 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 		logger.Debug("Client old email not found")
 		needRestart = true
 	}
-	return needRestart, tx.Save(oldInbound).Error
+	err = tx.Save(oldInbound).Error
+	if err != nil {
+		return needRestart, err
+	}
+	err = syncInboundClientsFromSettings(tx, oldInbound)
+	return needRestart, err
 }
 
 func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (error, bool) {
@@ -2362,6 +2396,9 @@ func (s *InboundService) MigrationRequirements() {
 
 func (s *InboundService) MigrateDB() {
 	s.MigrationRequirements()
+	if err := s.SyncAllInboundClients(); err != nil {
+		logger.Warning("Sync inbound clients failed:", err)
+	}
 	s.MigrationRemoveOrphanedTraffics()
 }
 

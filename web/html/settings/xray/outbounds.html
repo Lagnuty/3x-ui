@@ -9,6 +9,7 @@
                 </a-button>
                 <a-button type="primary" icon="cloud"
                     @click="showWarp()">WARP</a-button>
+                <a-button icon="link" @click="openOutboundSub">Outbound Sub</a-button>
             </a-space>
         </a-col>
         <a-col :xs="12" :sm="12" :lg="12" :style="{ textAlign: 'right' }">
@@ -28,6 +29,30 @@
             </a-button-group>
         </a-col>
     </a-row>
+        <a-card size="small" title="Panel Egress Bridge" :style="{ marginBottom: '12px' }">
+        <a-alert
+            type="info"
+            message="Route the panel's own outbound requests through a selected Xray outbound. A loopback SOCKS inbound tagged panel-egress is injected into the generated runtime config."
+            show-icon
+            :style="{ marginBottom: '10px' }">
+        </a-alert>
+        <a-row :gutter="[12, 12]" :style="{ alignItems: 'center' }">
+            <a-col :xs="24" :md="12">
+                <a-select v-model="panelOutbound" allow-clear placeholder="Direct panel egress" :style="{ width: '100%' }">
+                    <a-select-option v-for="o in outboundData" :key="o.tag" :value="o.tag" :disabled="!o.tag || o.tag === 'blocked'">
+                        [[ o.tag || '(no tag)' ]] ([[ o.protocol ]])
+                    </a-select-option>
+                    <a-select-option v-for="b in balancersData" :key="'balancer:' + b.tag" :value="b.tag" :disabled="!b.tag">
+                        [[ b.tag ]] (balancer)
+                    </a-select-option>
+                </a-select>
+            </a-col>
+            <a-col :xs="24" :md="12">
+                <a-tag v-if="panelOutbound" color="blue">panel-egress -> [[ panelOutbound ]]</a-tag>
+                <a-tag v-else>Direct</a-tag>
+            </a-col>
+        </a-row>
+    </a-card>
     <a-table :columns="outboundColumns" bordered :row-key="r => r.key"
         :data-source="outboundData"
         :scroll="isMobile ? {} : { x: 800 }" :pagination="false"
@@ -123,5 +148,50 @@
             <span v-else>-</span>
         </template>
     </a-table>
+    <a-card size="small" title="Outbound Subscriptions" :style="{ marginTop: '12px' }">
+        <template #extra>
+            <a-space>
+                <a-button size="small" icon="plus" @click="openOutboundSub">Add</a-button>
+                <a-button size="small" icon="reload" @click="loadOutboundSubs">Refresh</a-button>
+            </a-space>
+        </template>
+        <a-alert
+            type="info"
+            message="Fetched JSON outbounds are merged into Xray config on restart. Duplicate tags are skipped."
+            show-icon
+            :style="{ marginBottom: '10px' }">
+        </a-alert>
+        <a-table
+            size="small"
+            row-key="id"
+            :columns="outboundSubColumns"
+            :data-source="outboundSubs"
+            :pagination="{ pageSize: 8 }"
+            :scroll="{ x: 900 }">
+            <template slot="enabled" slot-scope="text, row">
+                <a-tag :color="row.enabled ? 'green' : 'red'">[[ row.enabled ? 'Enabled' : 'Disabled' ]]</a-tag>
+            </template>
+            <template slot="lastUpdated" slot-scope="text, row">
+                [[ row.lastUpdated ? new Date(row.lastUpdated * 1000).toLocaleString() : '-' ]]
+            </template>
+            <template slot="error" slot-scope="text, row">
+                <a-tooltip v-if="row.lastError" :title="row.lastError">
+                    <a-tag color="red">Error</a-tag>
+                </a-tooltip>
+                <span v-else>-</span>
+            </template>
+            <template slot="actions" slot-scope="text, row">
+                <a-space>
+                    <a-button size="small" icon="sync" @click="refreshOutboundSub(row)">Fetch</a-button>
+                    <a-button size="small" icon="edit" @click="openOutboundSub(row)">Edit</a-button>
+                    <a-button size="small" icon="arrow-up" @click="moveOutboundSub(row, 'up')"></a-button>
+                    <a-button size="small" icon="arrow-down" @click="moveOutboundSub(row, 'down')"></a-button>
+                    <a-popconfirm title="Delete outbound subscription?" @confirm="deleteOutboundSub(row)">
+                        <a-button size="small" icon="delete" type="danger">Delete</a-button>
+                    </a-popconfirm>
+                </a-space>
+            </template>
+        </a-table>
+    </a-card>
 </a-space>
 {{end}}

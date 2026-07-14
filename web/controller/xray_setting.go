@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"github.com/mhsanaei/3x-ui/v2/util/common"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
@@ -15,6 +16,7 @@ type XraySettingController struct {
 	SettingService     service.SettingService
 	InboundService     service.InboundService
 	OutboundService    service.OutboundService
+	OutboundSubService service.OutboundSubscriptionService
 	XrayService        service.XrayService
 	WarpService        service.WarpService
 }
@@ -38,6 +40,12 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/update", a.updateSetting)
 	g.POST("/resetOutboundsTraffic", a.resetOutboundsTraffic)
 	g.POST("/testOutbound", a.testOutbound)
+	g.GET("/outboundSubs", a.listOutboundSubs)
+	g.POST("/outboundSubs/create", a.createOutboundSub)
+	g.POST("/outboundSubs/update/:id", a.updateOutboundSub)
+	g.POST("/outboundSubs/delete/:id", a.deleteOutboundSub)
+	g.POST("/outboundSubs/refresh/:id", a.refreshOutboundSub)
+	g.POST("/outboundSubs/move/:id", a.moveOutboundSub)
 }
 
 // getXraySetting retrieves the Xray configuration template, inbound tags, and outbound test URL.
@@ -56,10 +64,12 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 	if outboundTestUrl == "" {
 		outboundTestUrl = "https://www.google.com/generate_204"
 	}
+	panelOutbound, _ := a.SettingService.GetPanelOutbound()
 	xrayResponse := map[string]interface{}{
 		"xraySetting":     json.RawMessage(xraySetting),
 		"inboundTags":     json.RawMessage(inboundTags),
 		"outboundTestUrl": outboundTestUrl,
+		"panelOutbound":   panelOutbound,
 	}
 	result, err := json.Marshal(xrayResponse)
 	if err != nil {
@@ -81,6 +91,7 @@ func (a *XraySettingController) updateSetting(c *gin.Context) {
 		outboundTestUrl = "https://www.google.com/generate_204"
 	}
 	_ = a.SettingService.SetXrayOutboundTestUrl(outboundTestUrl)
+	_ = a.SettingService.SetPanelOutbound(c.PostForm("panelOutbound"))
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), nil)
 }
 
@@ -165,4 +176,90 @@ func (a *XraySettingController) testOutbound(c *gin.Context) {
 	}
 
 	jsonObj(c, result, nil)
+}
+
+type outboundSubForm struct {
+	Remark         string `json:"remark" form:"remark"`
+	Url            string `json:"url" form:"url"`
+	TagPrefix      string `json:"tagPrefix" form:"tagPrefix"`
+	Enabled        bool   `json:"enabled" form:"enabled"`
+	UpdateInterval int    `json:"updateInterval" form:"updateInterval"`
+	AllowPrivate   bool   `json:"allowPrivate" form:"allowPrivate"`
+	Prepend        bool   `json:"prepend" form:"prepend"`
+}
+
+type outboundSubMoveForm struct {
+	Dir string `json:"dir" form:"dir"`
+}
+
+func (a *XraySettingController) listOutboundSubs(c *gin.Context) {
+	list, err := a.OutboundSubService.List()
+	jsonObj(c, list, err)
+}
+
+func (a *XraySettingController) createOutboundSub(c *gin.Context) {
+	form := &outboundSubForm{Enabled: true, UpdateInterval: 600}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, "Failed to create outbound subscription", err)
+		return
+	}
+	sub, err := a.OutboundSubService.Create(form.Remark, form.Url, form.TagPrefix, form.Enabled, form.UpdateInterval, form.AllowPrivate, form.Prepend)
+	jsonObj(c, sub, err)
+}
+
+func (a *XraySettingController) updateOutboundSub(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid id", err)
+		return
+	}
+	form := &outboundSubForm{Enabled: true, UpdateInterval: 600}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, "Failed to update outbound subscription", err)
+		return
+	}
+	err = a.OutboundSubService.Update(id, form.Remark, form.Url, form.TagPrefix, form.Enabled, form.UpdateInterval, form.AllowPrivate, form.Prepend)
+	jsonObj(c, "", err)
+}
+
+func (a *XraySettingController) deleteOutboundSub(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid id", err)
+		return
+	}
+	err = a.OutboundSubService.Delete(id)
+	if err == nil {
+		a.XrayService.SetToNeedRestart()
+	}
+	jsonObj(c, "", err)
+}
+
+func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid id", err)
+		return
+	}
+	outbounds, err := a.OutboundSubService.Refresh(id)
+	if err == nil {
+		a.XrayService.SetToNeedRestart()
+	}
+	jsonObj(c, outbounds, err)
+}
+
+func (a *XraySettingController) moveOutboundSub(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid id", err)
+		return
+	}
+	form := &outboundSubMoveForm{}
+	_ = c.ShouldBind(form)
+	up := form.Dir == "up"
+	err = a.OutboundSubService.Move(id, up)
+	if err == nil {
+		a.XrayService.SetToNeedRestart()
+	}
+	jsonObj(c, "", err)
 }

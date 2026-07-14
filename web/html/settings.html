@@ -125,6 +125,20 @@
       entryProtocol: null,
       entryIsIP: false,
       user: {},
+      apiTokens: [],
+      apiTokenForm: {
+        name: '',
+      },
+      createdApiToken: {
+        visible: false,
+        token: '',
+      },
+      apiTokenColumns: [
+        { title: 'Name', dataIndex: 'name', key: 'name' },
+        { title: 'Enabled', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 120 },
+        { title: 'Created', key: 'createdAt', scopedSlots: { customRender: 'createdAt' }, width: 180 },
+        { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 120 },
+      ],
       lang: LanguageManager.getLanguage(),
       inboundOptions: [],
       remarkModels: { i: 'Inbound', e: 'Email', o: 'Other' },
@@ -321,6 +335,51 @@
         } else {
           sendUpdateUserRequest();
         }
+      },
+      async loadApiTokens() {
+        const msg = await HttpUtil.get("/panel/setting/apiTokens");
+        if (msg && msg.success) {
+          this.apiTokens = msg.obj || [];
+        }
+      },
+      async createApiToken() {
+        if (!this.apiTokenForm.name) {
+          this.$message.warning('Token name is required');
+          return;
+        }
+        const msg = await HttpUtil.post("/panel/setting/apiTokens/create", { name: this.apiTokenForm.name });
+        if (msg && msg.success) {
+          this.apiTokenForm.name = '';
+          this.createdApiToken = {
+            visible: true,
+            token: msg.obj.token,
+          };
+          await this.loadApiTokens();
+        }
+      },
+      async deleteApiToken(row) {
+        const msg = await HttpUtil.post(`/panel/setting/apiTokens/delete/${row.id}`);
+        if (msg && msg.success) {
+          this.$message.success('Deleted');
+          await this.loadApiTokens();
+        }
+      },
+      async setApiTokenEnabled(row, enabled) {
+        const oldValue = row.enabled;
+        row.enabled = enabled;
+        const msg = await HttpUtil.post(`/panel/setting/apiTokens/setEnabled/${row.id}`, { enabled });
+        if (!msg || !msg.success) {
+          row.enabled = oldValue;
+        }
+      },
+      copyCreatedApiToken() {
+        if (!this.createdApiToken.token) return;
+        navigator.clipboard.writeText(this.createdApiToken.token);
+        this.$message.success('Copied');
+      },
+      formatTimestamp(value) {
+        if (!value) return '';
+        return new Date(value).toLocaleString();
       },
       async restartPanel() {
         await new Promise(resolve => {
@@ -628,6 +687,7 @@
       this.entryIsIP = this._isIp(this.entryHost);
       await this.getAllSetting();
       await this.loadInboundTags();
+      await this.loadApiTokens();
       while (true) {
         await PromiseUtil.sleep(1000);
         this.saveBtnDisable = this.oldAllSetting.equals(this.allSetting);

@@ -1,0 +1,307 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loading" :delay="300" tip='{{ i18n "loading"}}'>
+        <a-row :gutter="[16, 16]">
+          <a-col>
+            <a-card hoverable>
+              <template #title>
+                <a-space>
+                  <a-input-search v-model="search" placeholder="Search nodes" allow-clear :style="{ width: isMobile ? '100%' : '280px' }"></a-input-search>
+                  <a-button icon="reload" @click="loadNodes">Refresh</a-button>
+                  <a-button type="primary" icon="plus" @click="openNode()">Add node</a-button>
+                </a-space>
+              </template>
+              <a-table
+                size="small"
+                row-key="id"
+                :columns="columns"
+                :data-source="filteredNodes"
+                :pagination="{ pageSize: 20 }"
+                :scroll="{ x: 1180 }">
+                <template slot="status" slot-scope="text, row">
+                  <a-tag :color="statusColor(row.status)">[[ row.status || 'unknown' ]]</a-tag>
+                  <a-tag v-if="row.xrayState && row.xrayState !== 'running'" color="orange">Xray [[ row.xrayState ]]</a-tag>
+                  <div v-if="row.lastError" :style="{ color: '#f5222d', maxWidth: '260px', whiteSpace: 'normal' }">[[ row.lastError ]]</div>
+                </template>
+                <template slot="endpoint" slot-scope="text, row">
+                  <div>[[ row.scheme || 'https' ]]://[[ row.address ]]:[[ row.port ]][[ row.basePath || '/' ]]</div>
+                  <div :style="{ color: 'var(--ant-secondary-color)' }">[[ row.remark || '-' ]]</div>
+                </template>
+                <template slot="metrics" slot-scope="text, row">
+                  <div>CPU [[ fixed(row.cpuPct) ]]% / Mem [[ fixed(row.memPct) ]]%</div>
+                  <div>Latency [[ row.latencyMs || 0 ]] ms</div>
+                </template>
+                <template slot="versions" slot-scope="text, row">
+                  <div>Panel [[ row.panelVersion || '-' ]]</div>
+                  <div>Xray [[ row.xrayVersion || '-' ]]</div>
+                </template>
+                <template slot="counts" slot-scope="text, row">
+                  <a-tag>Inbounds [[ row.inboundCount || 0 ]]</a-tag>
+                  <a-tag>Clients [[ row.clientCount || 0 ]]</a-tag>
+                </template>
+                <template slot="enabled" slot-scope="text, row">
+                  <a-switch :checked="row.enable" @change="value => setEnable(row, value)"></a-switch>
+                </template>
+                <template slot="actions" slot-scope="text, row">
+                  <a-space>
+                    <a-button size="small" icon="thunderbolt" @click="probeNode(row)">Probe</a-button>
+                    <a-button size="small" icon="edit" @click="openNode(row)">Edit</a-button>
+                    <a-popconfirm title="Delete this node? Node-owned inbounds will be detached." @confirm="deleteNode(row)">
+                      <a-button size="small" type="danger" icon="delete">Delete</a-button>
+                    </a-popconfirm>
+                  </a-space>
+                </template>
+              </a-table>
+            </a-card>
+          </a-col>
+        </a-row>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+
+  <a-modal v-model="nodeModal.visible" :title="nodeModal.form.id ? 'Edit node' : 'Add node'" width="760px" @ok="saveNode">
+    <a-form layout="vertical">
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="12">
+          <a-form-item label="Name">
+            <a-input v-model="nodeModal.form.name" placeholder="de-fra-1"></a-input>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="12">
+          <a-form-item label="Remark">
+            <a-input v-model="nodeModal.form.remark"></a-input>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="6">
+          <a-form-item label="Scheme">
+            <a-select v-model="nodeModal.form.scheme">
+              <a-select-option value="https">https</a-select-option>
+              <a-select-option value="http">http</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="12">
+          <a-form-item label="Address">
+            <a-input v-model="nodeModal.form.address" placeholder="node.example.com"></a-input>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="6">
+          <a-form-item label="Port">
+            <a-input-number v-model="nodeModal.form.port" :min="1" :max="65535" :style="{ width: '100%' }"></a-input-number>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="12">
+          <a-form-item label="Base path">
+            <a-input v-model="nodeModal.form.basePath" placeholder="/"></a-input>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="12">
+          <a-form-item label="API token">
+            <a-input-password v-model="nodeModal.form.apiToken" placeholder="Bearer token from remote panel"></a-input-password>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="8">
+          <a-form-item label="TLS verify">
+            <a-select v-model="nodeModal.form.tlsVerifyMode">
+              <a-select-option value="verify">Verify certificate</a-select-option>
+              <a-select-option value="skip">Skip verification</a-select-option>
+              <a-select-option value="pin">Pinned SHA-256</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="16">
+          <a-form-item label="Pinned certificate SHA-256">
+            <a-input v-model="nodeModal.form.pinnedCertSha256" :disabled="nodeModal.form.tlsVerifyMode !== 'pin'"></a-input>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="8">
+          <a-form-item label="Inbound sync">
+            <a-select v-model="nodeModal.form.inboundSyncMode">
+              <a-select-option value="all">All</a-select-option>
+              <a-select-option value="selected">Selected tags</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="16">
+          <a-form-item label="Inbound tags">
+            <a-select
+              v-model="nodeModal.form.inboundTags"
+              mode="tags"
+              :disabled="nodeModal.form.inboundSyncMode !== 'selected'"
+              :style="{ width: '100%' }"
+              placeholder="Type tag and press Enter">
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-space>
+        <a-checkbox v-model="nodeModal.form.enable">Enable</a-checkbox>
+        <a-checkbox v-model="nodeModal.form.allowPrivateAddress">Allow private/internal address</a-checkbox>
+      </a-space>
+    </a-form>
+    <template slot="footer">
+      <a-button @click="nodeModal.visible = false">Cancel</a-button>
+      <a-button icon="thunderbolt" @click="testModalNode">Test</a-button>
+      <a-button type="primary" @click="saveNode">Save</a-button>
+    </template>
+  </a-modal>
+</a-layout>
+
+{{ template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+<script>
+  const app = new Vue({
+    delimiters: ['[[', ']]'],
+    mixins: [MediaQueryMixin],
+    el: '#app',
+    data() {
+      return {
+        themeSwitcher,
+        loading: false,
+        search: '',
+        nodes: [],
+        nodeModal: {
+          visible: false,
+          form: {},
+        },
+        columns: [
+          { title: 'Name', dataIndex: 'name', key: 'name', width: 180 },
+          { title: 'Endpoint', key: 'endpoint', scopedSlots: { customRender: 'endpoint' }, width: 260 },
+          { title: 'Status', key: 'status', scopedSlots: { customRender: 'status' }, width: 280 },
+          { title: 'Metrics', key: 'metrics', scopedSlots: { customRender: 'metrics' }, width: 160 },
+          { title: 'Versions', key: 'versions', scopedSlots: { customRender: 'versions' }, width: 170 },
+          { title: 'Counts', key: 'counts', scopedSlots: { customRender: 'counts' }, width: 170 },
+          { title: 'Enable', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 90 },
+          { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 230 },
+        ],
+      };
+    },
+    computed: {
+      filteredNodes() {
+        const needle = this.search.trim().toLowerCase();
+        if (!needle) return this.nodes;
+        return this.nodes.filter(row => {
+          return [row.name, row.remark, row.address, row.status, row.xrayVersion, row.panelVersion]
+            .filter(Boolean)
+            .some(value => String(value).toLowerCase().includes(needle));
+        });
+      },
+    },
+    mounted() {
+      this.loadNodes();
+    },
+    methods: {
+      defaultForm() {
+        return {
+          id: 0,
+          name: '',
+          remark: '',
+          scheme: 'https',
+          address: '',
+          port: 2053,
+          basePath: '/',
+          apiToken: '',
+          enable: true,
+          allowPrivateAddress: false,
+          tlsVerifyMode: 'verify',
+          pinnedCertSha256: '',
+          inboundSyncMode: 'all',
+          inboundTags: [],
+        };
+      },
+      async loadNodes() {
+        this.loading = true;
+        try {
+          const res = await axios.get('panel/api/nodes/list');
+          if (res.data && res.data.success) {
+            this.nodes = res.data.obj || [];
+          } else {
+            this.$message.error(res.data.msg || 'Unable to load nodes');
+          }
+        } finally {
+          this.loading = false;
+        }
+      },
+      openNode(row) {
+        this.nodeModal.form = Object.assign(this.defaultForm(), row ? JSON.parse(JSON.stringify(row)) : {});
+        if (!Array.isArray(this.nodeModal.form.inboundTags)) {
+          this.nodeModal.form.inboundTags = [];
+        }
+        this.nodeModal.visible = true;
+      },
+      async saveNode() {
+        const form = Object.assign({}, this.nodeModal.form);
+        const path = form.id ? `panel/api/nodes/update/${form.id}` : 'panel/api/nodes/add';
+        const res = await axios.post(path, form);
+        if (res.data && res.data.success) {
+          this.$message.success('Saved');
+          this.nodeModal.visible = false;
+          await this.loadNodes();
+        } else {
+          this.$message.error(res.data.msg || 'Save failed');
+        }
+      },
+      async testModalNode() {
+        const res = await axios.post('panel/api/nodes/test', this.nodeModal.form);
+        const obj = res.data ? res.data.obj : null;
+        if (obj && obj.status === 'online') {
+          this.$message.success(`Online, ${obj.latencyMs || 0} ms`);
+        } else {
+          this.$message.error((obj && obj.error) || 'Node is offline');
+        }
+      },
+      async probeNode(row) {
+        const res = await axios.post(`panel/api/nodes/probe/${row.id}`);
+        const obj = res.data ? res.data.obj : null;
+        if (obj && obj.status === 'online') {
+          this.$message.success(`Online, ${obj.latencyMs || 0} ms`);
+        } else {
+          this.$message.error((obj && obj.error) || 'Node is offline');
+        }
+        await this.loadNodes();
+      },
+      async setEnable(row, enable) {
+        const old = row.enable;
+        row.enable = enable;
+        const res = await axios.post(`panel/api/nodes/setEnable/${row.id}`, { enable });
+        if (!res.data || !res.data.success) {
+          row.enable = old;
+          this.$message.error(res.data.msg || 'Update failed');
+        }
+      },
+      async deleteNode(row) {
+        const res = await axios.post(`panel/api/nodes/del/${row.id}`);
+        if (res.data && res.data.success) {
+          this.$message.success('Deleted');
+          await this.loadNodes();
+        } else {
+          this.$message.error(res.data.msg || 'Delete failed');
+        }
+      },
+      statusColor(status) {
+        if (status === 'online') return 'green';
+        if (status === 'offline') return 'red';
+        return 'default';
+      },
+      fixed(value) {
+        return Number(value || 0).toFixed(1);
+      },
+    },
+  });
+</script>
+{{ template "page/body_end" .}}

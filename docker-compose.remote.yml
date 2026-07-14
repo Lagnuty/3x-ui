@@ -1,0 +1,18 @@
+services:
+  3xui:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.remote
+      args:
+        XUI_REPO: ${XUI_REPO:-https://github.com/Lagnuty/3x-ui.git}
+        XUI_REF: ${XUI_REF:-3xui}
+    container_name: 3xui_app
+    volumes:
+      - $PWD/db/:/etc/x-ui/
+      - $PWD/cert/:/root/cert/
+    environment:
+      XRAY_VMESS_AEAD_FORCED: "false"
+      XUI_ENABLE_FAIL2BAN: "true"
+    tty: true
+    network_mode: host
+    restart: unless-stopped

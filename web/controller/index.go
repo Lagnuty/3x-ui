@@ -71,20 +71,32 @@ func (a *IndexController) login(c *gin.Context) {
 		return
 	}
 
-	user := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode)
+	remoteIP := getRemoteIp(c)
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
 	safeUser := template.HTMLEscapeString(form.Username)
-	safePass := template.HTMLEscapeString(form.Password)
-
-	if user == nil {
-		logger.Warningf("wrong username: \"%s\", password: \"%s\", IP: \"%s\"", safeUser, safePass, getRemoteIp(c))
-		a.tgbot.UserLoginNotify(safeUser, safePass, getRemoteIp(c), timeStr, 0)
+	if blockedUntil, ok := defaultLoginLimiter.allow(remoteIP, form.Username); !ok {
+		logger.Warningf("failed login: username=%q, IP=%q, reason=%q, blocked_until=%s", safeUser, remoteIP, "too many failed attempts", blockedUntil.Format(time.RFC3339))
+		a.tgbot.UserLoginNotify(safeUser, "", remoteIP, timeStr, 0)
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
 		return
 	}
 
-	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, getRemoteIp(c))
-	a.tgbot.UserLoginNotify(safeUser, ``, getRemoteIp(c), timeStr, 1)
+	user := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode)
+
+	if user == nil {
+		if blockedUntil, blocked := defaultLoginLimiter.registerFailure(remoteIP, form.Username); blocked {
+			logger.Warningf("failed login: username=%q, IP=%q, reason=%q, blocked_until=%s", safeUser, remoteIP, "invalid credentials", blockedUntil.Format(time.RFC3339))
+		} else {
+			logger.Warningf("failed login: username=%q, IP=%q, reason=%q", safeUser, remoteIP, "invalid credentials")
+		}
+		a.tgbot.UserLoginNotify(safeUser, "", remoteIP, timeStr, 0)
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
+		return
+	}
+
+	defaultLoginLimiter.registerSuccess(remoteIP, form.Username)
+	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, remoteIP)
+	a.tgbot.UserLoginNotify(safeUser, ``, remoteIP, timeStr, 1)
 
 	sessionMaxAge, err := a.settingService.GetSessionMaxAge()
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/util/common"
+	"github.com/mhsanaei/3x-ui/v2/util/netproxy"
 	"github.com/mhsanaei/3x-ui/v2/util/random"
 	"github.com/mhsanaei/3x-ui/v2/util/reflect_util"
 	"github.com/mhsanaei/3x-ui/v2/web/entity"
@@ -80,6 +82,7 @@ var defaultValueMap = map[string]string{
 	"externalTrafficInformEnable": "false",
 	"externalTrafficInformURI":    "",
 	"xrayOutboundTestUrl":         "https://www.google.com/generate_204",
+	"panelOutbound":               "",
 
 	// LDAP defaults
 	"ldapEnable":            "false",
@@ -280,6 +283,45 @@ func (s *SettingService) GetXrayOutboundTestUrl() (string, error) {
 
 func (s *SettingService) SetXrayOutboundTestUrl(url string) error {
 	return s.setString("xrayOutboundTestUrl", url)
+}
+func (s *SettingService) GetPanelOutbound() (string, error) {
+	return s.getString("panelOutbound")
+}
+
+func (s *SettingService) SetPanelOutbound(tag string) error {
+	return s.setString("panelOutbound", strings.TrimSpace(tag))
+}
+
+func (s *SettingService) PanelEgressProxyURL() string {
+	tag, err := s.GetPanelOutbound()
+	if err != nil || strings.TrimSpace(tag) == "" {
+		return ""
+	}
+	proc := XrayProcess()
+	if proc == nil || !proc.IsRunning() {
+		logger.Warning("panel outbound [", tag, "] is set but Xray is not running, using a direct connection")
+		return ""
+	}
+	cfg := proc.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == PanelEgressInboundTag {
+			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
+		}
+	}
+	logger.Warning("panel outbound [", tag, "] is set but the egress bridge is not in the running config, using a direct connection")
+	return ""
+}
+
+func (s *SettingService) NewProxiedHTTPClient(timeout time.Duration) *http.Client {
+	client, err := netproxy.NewHTTPClient(s.PanelEgressProxyURL(), timeout)
+	if err != nil {
+		logger.Warning("invalid panel egress proxy, using direct connection:", err)
+		return &http.Client{Timeout: timeout}
+	}
+	return client
 }
 
 func (s *SettingService) GetListen() (string, error) {

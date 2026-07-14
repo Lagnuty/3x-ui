@@ -40,5 +40,46 @@
             </template>
         </a-setting-list-item>
     </a-collapse-panel>
+    <a-collapse-panel key="3" header="API Tokens">
+        <a-list-item>
+            <a-space direction="horizontal" :style="{ padding: '0 20px', marginBottom: '12px' }">
+                <a-input v-model.trim="apiTokenForm.name" placeholder="Token name" @press-enter="createApiToken"></a-input>
+                <a-button type="primary" icon="plus" @click="createApiToken">Create</a-button>
+                <a-button icon="reload" @click="loadApiTokens">Refresh</a-button>
+            </a-space>
+        </a-list-item>
+        <a-list-item>
+            <a-table
+                size="small"
+                row-key="id"
+                :columns="apiTokenColumns"
+                :data-source="apiTokens"
+                :pagination="{ pageSize: 10 }"
+                :scroll="{ x: 680 }"
+                :style="{ width: '100%' }">
+                <template slot="enabled" slot-scope="text, row">
+                    <a-switch :checked="row.enabled" @change="value => setApiTokenEnabled(row, value)"></a-switch>
+                </template>
+                <template slot="createdAt" slot-scope="text, row">
+                    [[ formatTimestamp(row.createdAt) ]]
+                </template>
+                <template slot="actions" slot-scope="text, row">
+                    <a-popconfirm title="Delete this API token?" @confirm="deleteApiToken(row)">
+                        <a-button size="small" icon="delete" type="danger">Delete</a-button>
+                    </a-popconfirm>
+                </template>
+            </a-table>
+        </a-list-item>
+    </a-collapse-panel>
 </a-collapse>
+
+<a-modal v-model="createdApiToken.visible" title="New API token" :footer="null">
+    <a-alert
+        type="warning"
+        message="Copy this token now. It will not be shown again."
+        show-icon
+        :style="{ marginBottom: '12px' }">
+    </a-alert>
+    <a-input-search :value="createdApiToken.token" readonly enter-button="Copy" @search="copyCreatedApiToken"></a-input-search>
+</a-modal>
 {{end}}

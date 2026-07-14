@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/mhsanaei/3x-ui/v2/logger"
+	"github.com/mhsanaei/3x-ui/v2/util/json_util"
 	"github.com/mhsanaei/3x-ui/v2/xray"
 
 	"go.uber.org/atomic"
@@ -31,6 +33,10 @@ type XrayService struct {
 // IsXrayRunning checks if the Xray process is currently running.
 func (s *XrayService) IsXrayRunning() bool {
 	return p != nil && p.IsRunning()
+}
+
+func XrayProcess() *xray.Process {
+	return p
 }
 
 // GetXrayErr returns the error from the Xray process, if any.
@@ -101,6 +107,14 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	err = json.Unmarshal([]byte(templateConfig), xrayConfig)
 	if err != nil {
 		return nil, err
+	}
+	if err := s.mergeOutboundSubscriptions(xrayConfig); err != nil {
+		return nil, err
+	}
+	if egressTag, err := s.settingService.GetPanelOutbound(); err != nil {
+		logger.Warning("read panelOutbound setting failed:", err)
+	} else if strings.TrimSpace(egressTag) != "" {
+		injectPanelEgress(xrayConfig, strings.TrimSpace(egressTag))
 	}
 
 	s.inboundService.AddTraffic(nil, nil)
@@ -194,6 +208,52 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	return xrayConfig, nil
 }
 
+func (s *XrayService) mergeOutboundSubscriptions(xrayConfig *xray.Config) error {
+	subService := &OutboundSubscriptionService{}
+	prepend, appendList, err := subService.ActiveOutboundsSplit()
+	if err != nil {
+		return err
+	}
+	if len(prepend) == 0 && len(appendList) == 0 {
+		return nil
+	}
+
+	var manual []any
+	if len(xrayConfig.OutboundConfigs) > 0 {
+		if err := json.Unmarshal(xrayConfig.OutboundConfigs, &manual); err != nil {
+			return err
+		}
+	}
+	merged := make([]any, 0, len(prepend)+len(manual)+len(appendList))
+	seen := map[string]bool{}
+	appendUnique := func(rows []any) {
+		for _, raw := range rows {
+			row, ok := raw.(map[string]any)
+			if !ok {
+				merged = append(merged, raw)
+				continue
+			}
+			tag, _ := row["tag"].(string)
+			if tag != "" {
+				if seen[tag] {
+					continue
+				}
+				seen[tag] = true
+			}
+			merged = append(merged, row)
+		}
+	}
+	appendUnique(prepend)
+	appendUnique(manual)
+	appendUnique(appendList)
+	raw, err := json.Marshal(merged)
+	if err != nil {
+		return err
+	}
+	xrayConfig.OutboundConfigs = raw
+	return nil
+}
+
 // GetXrayTraffic fetches the current traffic statistics from the running Xray process.
 func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, error) {
 	if !s.IsXrayRunning() {
@@ -268,4 +328,76 @@ func (s *XrayService) IsNeedRestartAndSetFalse() bool {
 // DidXrayCrash checks if Xray crashed by verifying it's not running and wasn't manually stopped.
 func (s *XrayService) DidXrayCrash() bool {
 	return !s.IsXrayRunning() && !isManuallyStopped.Load()
+}
+
+const PanelEgressInboundTag = "panel-egress"
+const panelEgressBasePort = 62790
+
+func injectPanelEgress(cfg *xray.Config, outboundTag string) {
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == PanelEgressInboundTag {
+			logger.Warning("panel egress: inbound tag [", PanelEgressInboundTag, "] already exists, skipping injection")
+			return
+		}
+	}
+	routing := map[string]any{}
+	if len(cfg.RouterConfig) > 0 {
+		if err := json.Unmarshal(cfg.RouterConfig, &routing); err != nil {
+			logger.Warning("panel egress: routing section is unparsable, skipping injection:", err)
+			return
+		}
+	}
+	rules, _ := routing["rules"].([]any)
+	rule := map[string]any{"type": "field", "inboundTag": []any{PanelEgressInboundTag}}
+	if routingTagIsBalancer(routing, outboundTag) {
+		rule["balancerTag"] = outboundTag
+	} else {
+		rule["outboundTag"] = outboundTag
+	}
+	routing["rules"] = append([]any{rule}, rules...)
+	newRouting, err := json.Marshal(routing)
+	if err != nil {
+		logger.Warning("panel egress: failed to rebuild routing section, skipping injection:", err)
+		return
+	}
+	cfg.RouterConfig = json_util.RawMessage(newRouting)
+
+	used := make(map[int]struct{}, len(cfg.InboundConfigs))
+	for i := range cfg.InboundConfigs {
+		used[cfg.InboundConfigs[i].Port] = struct{}{}
+	}
+	port := panelEgressBasePort
+	for {
+		if _, taken := used[port]; !taken {
+			break
+		}
+		port++
+	}
+	cfg.InboundConfigs = append(cfg.InboundConfigs, xray.InboundConfig{
+		Listen:   json_util.RawMessage(`"127.0.0.1"`),
+		Port:     port,
+		Protocol: "socks",
+		Settings: json_util.RawMessage(`{"auth":"noauth","udp":false}`),
+		Tag:      PanelEgressInboundTag,
+	})
+}
+
+func routingTagIsBalancer(routing map[string]any, tag string) bool {
+	if tag == "" {
+		return false
+	}
+	balancers, ok := routing["balancers"].([]any)
+	if !ok {
+		return false
+	}
+	for _, b := range balancers {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		if t, ok := bm["tag"].(string); ok && t == tag {
+			return true
+		}
+	}
+	return false
 }

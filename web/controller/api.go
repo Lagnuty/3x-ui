@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 	"github.com/mhsanaei/3x-ui/v2/web/session"
@@ -14,6 +15,8 @@ type APIController struct {
 	BaseController
 	inboundController *InboundController
 	serverController  *ServerController
+	apiTokenService   service.ApiTokenService
+	userService       service.UserService
 	Tgbot             service.Tgbot
 }
 
@@ -27,6 +30,19 @@ func NewAPIController(g *gin.RouterGroup) *APIController {
 // checkAPIAuth is a middleware that returns 404 for unauthenticated API requests
 // to hide the existence of API endpoints from unauthorized users
 func (a *APIController) checkAPIAuth(c *gin.Context) {
+	if auth := c.GetHeader("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+		if a.apiTokenService.Match(token) {
+			user, err := a.userService.GetFirstUser()
+			if err == nil && user != nil {
+				session.SetLoginUser(c, user)
+			}
+			c.Set("api_authed", true)
+			c.Next()
+			return
+		}
+	}
+
 	if !session.IsLogin(c) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -43,6 +59,15 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Inbounds API
 	inbounds := api.Group("/inbounds")
 	a.inboundController = NewInboundController(inbounds)
+
+	// Clients API
+	clients := api.Group("/clients")
+	NewClientController(clients)
+	NewGroupController(clients)
+
+	// Nodes API
+	nodes := api.Group("/nodes")
+	NewNodeController(nodes)
 
 	// Server API
 	server := api.Group("/server")

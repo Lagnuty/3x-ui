@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v2/util/crypto"
@@ -22,9 +23,10 @@ type updateUserForm struct {
 
 // SettingController handles settings and user management operations.
 type SettingController struct {
-	settingService service.SettingService
-	userService    service.UserService
-	panelService   service.PanelService
+	settingService  service.SettingService
+	userService     service.UserService
+	panelService    service.PanelService
+	apiTokenService service.ApiTokenService
 }
 
 // NewSettingController creates a new SettingController and initializes its routes.
@@ -44,6 +46,10 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateUser", a.updateUser)
 	g.POST("/restartPanel", a.restartPanel)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
+	g.GET("/apiTokens", a.listApiTokens)
+	g.POST("/apiTokens/create", a.createApiToken)
+	g.POST("/apiTokens/delete/:id", a.deleteApiToken)
+	g.POST("/apiTokens/setEnabled/:id", a.setApiTokenEnabled)
 }
 
 // getAllSetting retrieves all current settings.
@@ -118,4 +124,51 @@ func (a *SettingController) getDefaultXrayConfig(c *gin.Context) {
 		return
 	}
 	jsonObj(c, defaultJsonConfig, nil)
+}
+
+type apiTokenCreateForm struct {
+	Name string `json:"name" form:"name"`
+}
+
+type apiTokenEnabledForm struct {
+	Enabled bool `json:"enabled" form:"enabled"`
+}
+
+func (a *SettingController) listApiTokens(c *gin.Context) {
+	tokens, err := a.apiTokenService.List()
+	jsonObj(c, tokens, err)
+}
+
+func (a *SettingController) createApiToken(c *gin.Context) {
+	form := &apiTokenCreateForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	token, err := a.apiTokenService.Create(form.Name)
+	jsonObj(c, token, err)
+}
+
+func (a *SettingController) deleteApiToken(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	jsonObj(c, nil, a.apiTokenService.Delete(id))
+}
+
+func (a *SettingController) setApiTokenEnabled(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+
+	form := &apiTokenEnabledForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	jsonObj(c, nil, a.apiTokenService.SetEnabled(id, form.Enabled))
 }

@@ -99,6 +99,13 @@
                   </template>
                   {{ template "settings/xray/outbounds" . }}
                 </a-tab-pane>
+                <a-tab-pane key="tpl-proxy-builder" force-render="true">
+                  <template #tab>
+                    <a-icon type="link"></a-icon>
+                    <span>Proxy Builder</span>
+                  </template>
+                  {{ template "settings/xray/proxy_builder" . }}
+                </a-tab-pane>
                 <a-tab-pane key="tpl-reverse" :style="{ paddingTop: '20px' }"
                   force-render="true">
                   <template #tab>
@@ -255,9 +262,76 @@
       xraySetting: '',
       outboundTestUrl: 'https://www.google.com/generate_204',
       oldOutboundTestUrl: 'https://www.google.com/generate_204',
+      panelOutbound: '',
+      oldPanelOutbound: '',
       inboundTags: [],
       outboundsTraffic: [],
       outboundTestStates: {}, // Track testing state and results for each outbound
+      outboundSubs: [],
+      outboundSubForm: {
+        id: 0,
+        remark: '',
+        url: '',
+        tagPrefix: '',
+        enabled: true,
+        updateInterval: 600,
+        allowPrivate: false,
+        prepend: false,
+      },
+      outboundSubColumns: [
+        { title: 'Remark', dataIndex: 'remark', key: 'remark', width: 160 },
+        { title: 'Prefix', dataIndex: 'tagPrefix', key: 'tagPrefix', width: 120 },
+        { title: 'Enabled', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 110 },
+        { title: 'Outbounds', dataIndex: 'outboundCount', key: 'outboundCount', width: 100 },
+        { title: 'Last Updated', key: 'lastUpdated', scopedSlots: { customRender: 'lastUpdated' }, width: 190 },
+        { title: 'Error', key: 'error', scopedSlots: { customRender: 'error' }, width: 90 },
+        { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 330 },
+      ],
+      proxyBuilder: {
+        type: 'vless',
+        tag: 'proxy-vless',
+        host: '',
+        port: 443,
+        uuid: '',
+        password: '',
+        username: '',
+        method: 'chacha20-ietf-poly1305',
+        security: 'auto',
+        flow: '',
+        network: 'tcp',
+        transportSecurity: 'tls',
+        sni: '',
+        fingerprint: 'chrome',
+        path: '/',
+        headerHost: '',
+        serviceName: '',
+        publicKey: '',
+        shortId: '',
+        alpn: '',
+        insecure: false,
+        hyCongestion: '',
+        hyUp: '',
+        hyDown: '',
+        hyObfsPassword: '',
+        wgSecretKey: '',
+        wgPublicKey: '',
+        wgAddress: '172.16.0.2/32',
+        wgAllowedIPs: '0.0.0.0/0,::/0',
+        wgReserved: '',
+        wgMtu: 1420,
+        wgKeepAlive: 25,
+        ssMethods: [
+          'aes-256-gcm',
+          'aes-128-gcm',
+          'chacha20-poly1305',
+          'chacha20-ietf-poly1305',
+          'xchacha20-poly1305',
+          'xchacha20-ietf-poly1305',
+          '2022-blake3-aes-128-gcm',
+          '2022-blake3-aes-256-gcm',
+          '2022-blake3-chacha20-poly1305',
+        ],
+      },
       saveBtnDisable: true,
       refreshing: false,
       restartResult: '',
@@ -311,46 +385,46 @@
         },
         IPsOptions: [
           { label: 'Private IPs', value: 'geoip:private' },
-          { label: '🇮🇷 Iran', value: 'ext:geoip_IR.dat:ir' },
-          { label: '🇨🇳 China', value: 'geoip:cn' },
-          { label: '🇷🇺 Russia', value: 'ext:geoip_RU.dat:ru' },
-          { label: '🇻🇳 Vietnam', value: 'geoip:vn' },
-          { label: '🇪🇸 Spain', value: 'geoip:es' },
-          { label: '🇮🇩 Indonesia', value: 'geoip:id' },
-          { label: '🇺🇦 Ukraine', value: 'geoip:ua' },
-          { label: '🇹🇷 Türkiye', value: 'geoip:tr' },
-          { label: '🇧🇷 Brazil', value: 'geoip:br' },
+          { label: 'рџ‡®рџ‡· Iran', value: 'ext:geoip_IR.dat:ir' },
+          { label: 'рџ‡Ёрџ‡і China', value: 'geoip:cn' },
+          { label: 'рџ‡·рџ‡є Russia', value: 'ext:geoip_RU.dat:ru' },
+          { label: 'рџ‡»рџ‡і Vietnam', value: 'geoip:vn' },
+          { label: 'рџ‡Єрџ‡ё Spain', value: 'geoip:es' },
+          { label: 'рџ‡®рџ‡© Indonesia', value: 'geoip:id' },
+          { label: 'рџ‡єрџ‡¦ Ukraine', value: 'geoip:ua' },
+          { label: 'рџ‡№рџ‡· TГјrkiye', value: 'geoip:tr' },
+          { label: 'рџ‡§рџ‡· Brazil', value: 'geoip:br' },
         ],
         DomainsOptions: [
-          { label: '🇮🇷 Iran', value: 'ext:geosite_IR.dat:ir' },
-          { label: '🇮🇷 .ir', value: 'regexp:.*\\.ir$' },
-          { label: '🇮🇷 .ایران', value: 'regexp:.*\\.xn--mgba3a4f16a$' },
-          { label: '🇨🇳 China', value: 'geosite:cn' },
-          { label: '🇨🇳 .cn', value: 'regexp:.*\\.cn$' },
-          { label: '🇷🇺 Russia', value: 'ext:geosite_RU.dat:ru-available-only-inside' },
-          { label: '🇷🇺 .ru', value: 'regexp:.*\\.ru$' },
-          { label: '🇷🇺 .su', value: 'regexp:.*\\.su$' },
-          { label: '🇷🇺 .рф', value: 'regexp:.*\\.xn--p1ai$' },
-          { label: '🇻🇳 .vn', value: 'regexp:.*\\.vn$' },
+          { label: 'рџ‡®рџ‡· Iran', value: 'ext:geosite_IR.dat:ir' },
+          { label: 'рџ‡®рџ‡· .ir', value: 'regexp:.*\\.ir$' },
+          { label: 'рџ‡®рџ‡· .Ш§ЫЊШ±Ш§Щ†', value: 'regexp:.*\\.xn--mgba3a4f16a$' },
+          { label: 'рџ‡Ёрџ‡і China', value: 'geosite:cn' },
+          { label: 'рџ‡Ёрџ‡і .cn', value: 'regexp:.*\\.cn$' },
+          { label: 'рџ‡·рџ‡є Russia', value: 'ext:geosite_RU.dat:ru-available-only-inside' },
+          { label: 'рџ‡·рџ‡є .ru', value: 'regexp:.*\\.ru$' },
+          { label: 'рџ‡·рџ‡є .su', value: 'regexp:.*\\.su$' },
+          { label: 'рџ‡·рџ‡є .СЂС„', value: 'regexp:.*\\.xn--p1ai$' },
+          { label: 'рџ‡»рџ‡і .vn', value: 'regexp:.*\\.vn$' },
         ],
         BlockDomainsOptions: [
           { label: 'Ads All', value: 'geosite:category-ads-all' },
-          { label: 'Ads IR 🇮🇷', value: 'ext:geosite_IR.dat:category-ads-all' },
-          { label: 'Ads RU 🇷🇺', value: 'ext:geosite_RU.dat:category-ads-all' },
-          { label: 'Malware 🇮🇷', value: 'ext:geosite_IR.dat:malware' },
-          { label: 'Phishing 🇮🇷', value: 'ext:geosite_IR.dat:phishing' },
-          { label: 'Cryptominers 🇮🇷', value: 'ext:geosite_IR.dat:cryptominers' },
+          { label: 'Ads IR рџ‡®рџ‡·', value: 'ext:geosite_IR.dat:category-ads-all' },
+          { label: 'Ads RU рџ‡·рџ‡є', value: 'ext:geosite_RU.dat:category-ads-all' },
+          { label: 'Malware рџ‡®рџ‡·', value: 'ext:geosite_IR.dat:malware' },
+          { label: 'Phishing рџ‡®рџ‡·', value: 'ext:geosite_IR.dat:phishing' },
+          { label: 'Cryptominers рџ‡®рџ‡·', value: 'ext:geosite_IR.dat:cryptominers' },
           { label: 'Adult +18', value: 'geosite:category-porn' },
-          { label: '🇮🇷 Iran', value: 'ext:geosite_IR.dat:ir' },
-          { label: '🇮🇷 .ir', value: 'regexp:.*\\.ir$' },
-          { label: '🇮🇷 .ایران', value: 'regexp:.*\\.xn--mgba3a4f16a$' },
-          { label: '🇨🇳 China', value: 'geosite:cn' },
-          { label: '🇨🇳 .cn', value: 'regexp:.*\\.cn$' },
-          { label: '🇷🇺 Russia', value: 'ext:geosite_RU.dat:ru-available-only-inside' },
-          { label: '🇷🇺 .ru', value: 'regexp:.*\\.ru$' },
-          { label: '🇷🇺 .su', value: 'regexp:.*\\.su$' },
-          { label: '🇷🇺 .рф', value: 'regexp:.*\\.xn--p1ai$' },
-          { label: '🇻🇳 .vn', value: 'regexp:.*\\.vn$' },
+          { label: 'рџ‡®рџ‡· Iran', value: 'ext:geosite_IR.dat:ir' },
+          { label: 'рџ‡®рџ‡· .ir', value: 'regexp:.*\\.ir$' },
+          { label: 'рџ‡®рџ‡· .Ш§ЫЊШ±Ш§Щ†', value: 'regexp:.*\\.xn--mgba3a4f16a$' },
+          { label: 'рџ‡Ёрџ‡і China', value: 'geosite:cn' },
+          { label: 'рџ‡Ёрџ‡і .cn', value: 'regexp:.*\\.cn$' },
+          { label: 'рџ‡·рџ‡є Russia', value: 'ext:geosite_RU.dat:ru-available-only-inside' },
+          { label: 'рџ‡·рџ‡є .ru', value: 'regexp:.*\\.ru$' },
+          { label: 'рџ‡·рџ‡є .su', value: 'regexp:.*\\.su$' },
+          { label: 'рџ‡·рџ‡є .СЂС„', value: 'regexp:.*\\.xn--p1ai$' },
+          { label: 'рџ‡»рџ‡і .vn', value: 'regexp:.*\\.vn$' },
         ],
         ServicesOptions: [
           { label: 'Apple', value: 'geosite:apple' },
@@ -405,6 +479,8 @@
           this.inboundTags = result.inboundTags;
           this.outboundTestUrl = result.outboundTestUrl || 'https://www.google.com/generate_204';
           this.oldOutboundTestUrl = this.outboundTestUrl;
+          this.panelOutbound = result.panelOutbound || '';
+          this.oldPanelOutbound = this.panelOutbound;
           this.saveBtnDisable = true;
         }
       },
@@ -412,12 +488,405 @@
         this.loading(true);
         const msg = await HttpUtil.post("/panel/xray/update", {
           xraySetting: this.xraySetting,
-          outboundTestUrl: this.outboundTestUrl || 'https://www.google.com/generate_204'
+          outboundTestUrl: this.outboundTestUrl || 'https://www.google.com/generate_204',
+          panelOutbound: this.panelOutbound || ''
         });
         this.loading(false);
         if (msg.success) {
           await this.getXraySetting();
         }
+      },
+      async loadOutboundSubs() {
+        const msg = await HttpUtil.get("/panel/xray/outboundSubs");
+        if (msg && msg.success) {
+          this.outboundSubs = msg.obj || [];
+        }
+      },
+      openOutboundSub(row) {
+        this.outboundSubForm = row ? {
+          id: row.id,
+          remark: row.remark || '',
+          url: row.url || '',
+          tagPrefix: row.tagPrefix || '',
+          enabled: row.enabled,
+          updateInterval: row.updateInterval || 600,
+          allowPrivate: row.allowPrivate || false,
+          prepend: row.prepend || false,
+        } : {
+          id: 0,
+          remark: '',
+          url: '',
+          tagPrefix: '',
+          enabled: true,
+          updateInterval: 600,
+          allowPrivate: false,
+          prepend: false,
+        };
+        this.$confirm({
+          title: row ? 'Edit outbound subscription' : 'Add outbound subscription',
+          class: themeSwitcher.currentTheme,
+          okText: '{{ i18n "confirm" }}',
+          cancelText: '{{ i18n "cancel" }}',
+          content: h => h('div', [
+            h('a-input', {
+              props: { value: this.outboundSubForm.remark, placeholder: 'Remark' },
+              on: { input: e => this.outboundSubForm.remark = e.target.value },
+              style: { marginBottom: '8px' }
+            }),
+            h('a-input', {
+              props: { value: this.outboundSubForm.url, placeholder: 'https://example.com/outbounds.json' },
+              on: { input: e => this.outboundSubForm.url = e.target.value },
+              style: { marginBottom: '8px' }
+            }),
+            h('a-input', {
+              props: { value: this.outboundSubForm.tagPrefix, placeholder: 'Tag prefix, e.g. sub1-' },
+              on: { input: e => this.outboundSubForm.tagPrefix = e.target.value },
+              style: { marginBottom: '8px' }
+            }),
+            h('a-input-number', {
+              props: { value: this.outboundSubForm.updateInterval, min: 60, step: 60 },
+              on: { change: v => this.outboundSubForm.updateInterval = v || 600 },
+              style: { width: '100%', marginBottom: '8px' }
+            }),
+            h('div', { style: { display: 'flex', gap: '16px', flexWrap: 'wrap' } }, [
+              h('a-checkbox', {
+                props: { checked: this.outboundSubForm.enabled },
+                on: { change: e => this.outboundSubForm.enabled = e.target.checked },
+              }, 'Enabled'),
+              h('a-checkbox', {
+                props: { checked: this.outboundSubForm.prepend },
+                on: { change: e => this.outboundSubForm.prepend = e.target.checked },
+              }, 'Prepend'),
+              h('a-checkbox', {
+                props: { checked: this.outboundSubForm.allowPrivate },
+                on: { change: e => this.outboundSubForm.allowPrivate = e.target.checked },
+              }, 'Allow private host'),
+            ]),
+          ]),
+          onOk: () => this.saveOutboundSub(),
+        });
+      },
+      async saveOutboundSub() {
+        const url = this.outboundSubForm.id
+          ? `/panel/xray/outboundSubs/update/${this.outboundSubForm.id}`
+          : "/panel/xray/outboundSubs/create";
+        const msg = await HttpUtil.post(url, this.outboundSubForm);
+        if (msg && msg.success) {
+          Vue.prototype.$message.success('Saved');
+          await this.loadOutboundSubs();
+        }
+      },
+      async refreshOutboundSub(row) {
+        const msg = await HttpUtil.post(`/panel/xray/outboundSubs/refresh/${row.id}`);
+        if (msg && msg.success) {
+          Vue.prototype.$message.success(`Fetched ${(msg.obj || []).length} outbound(s)`);
+          await this.loadOutboundSubs();
+        }
+      },
+      async deleteOutboundSub(row) {
+        const msg = await HttpUtil.post(`/panel/xray/outboundSubs/delete/${row.id}`);
+        if (msg && msg.success) {
+          Vue.prototype.$message.success('Deleted');
+          await this.loadOutboundSubs();
+        }
+      },
+      async moveOutboundSub(row, dir) {
+        const msg = await HttpUtil.post(`/panel/xray/outboundSubs/move/${row.id}`, { dir });
+        if (msg && msg.success) {
+          await this.loadOutboundSubs();
+        }
+      },
+      resetProxyBuilder() {
+        const keepType = this.proxyBuilder.type || 'vless';
+        this.proxyBuilder = Object.assign(this.proxyBuilder, {
+          type: keepType,
+          tag: `proxy-${keepType}`,
+          host: '',
+          port: keepType === 'hysteria2' ? 443 : 443,
+          uuid: '',
+          password: '',
+          username: '',
+          method: 'chacha20-ietf-poly1305',
+          security: 'auto',
+          flow: '',
+          network: 'tcp',
+          transportSecurity: keepType === 'socks' || keepType === 'http' || keepType === 'wireguard' ? 'none' : 'tls',
+          sni: '',
+          fingerprint: 'chrome',
+          path: '/',
+          headerHost: '',
+          serviceName: '',
+          publicKey: '',
+          shortId: '',
+          alpn: '',
+          insecure: false,
+          hyCongestion: '',
+          hyUp: '',
+          hyDown: '',
+          hyObfsPassword: '',
+          wgSecretKey: '',
+          wgPublicKey: '',
+          wgAddress: '172.16.0.2/32',
+          wgAllowedIPs: '0.0.0.0/0,::/0',
+          wgReserved: '',
+          wgMtu: 1420,
+          wgKeepAlive: 25,
+        });
+      },
+      onProxyBuilderTypeChange(type) {
+        this.proxyBuilder.tag = `proxy-${type}`;
+        if (type === 'hysteria2') {
+          this.proxyBuilder.port = 443;
+          this.proxyBuilder.transportSecurity = 'tls';
+        } else if (type === 'socks' || type === 'http' || type === 'wireguard') {
+          this.proxyBuilder.transportSecurity = 'none';
+        } else {
+          this.proxyBuilder.port = 443;
+          this.proxyBuilder.transportSecurity = 'tls';
+        }
+      },
+      proxyBuilderQuery(params) {
+        const out = new URLSearchParams();
+        Object.keys(params).forEach(key => {
+          const value = params[key];
+          if (value === undefined || value === null || value === '' || value === false) return;
+          out.set(key, String(value));
+        });
+        const query = out.toString();
+        return query ? `?${query}` : '';
+      },
+      proxyBuilderLinkHost(host) {
+        return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+      },
+      ensureTemplateOutbounds() {
+        const settings = this.templateSettings || {};
+        if (!Array.isArray(settings.outbounds)) settings.outbounds = [];
+        this.templateSettings = settings;
+        return settings.outbounds;
+      },
+      proxyBuilderTransportParams() {
+        const b = this.proxyBuilder;
+        const params = {};
+        if (['vless','vmess','trojan','shadowsocks'].includes(b.type)) {
+          params.type = b.network || 'tcp';
+          params.security = b.transportSecurity || 'none';
+          if (b.network === 'ws' || b.network === 'httpupgrade' || b.network === 'xhttp') {
+            params.path = b.path || '/';
+            if (b.headerHost) params.host = b.headerHost;
+          }
+          if (b.network === 'grpc') params.serviceName = b.serviceName;
+          if (b.transportSecurity === 'tls') {
+            if (b.sni) params.sni = b.sni;
+            if (b.fingerprint) params.fp = b.fingerprint;
+            if (b.alpn) params.alpn = b.alpn;
+          }
+          if (b.transportSecurity === 'reality') {
+            if (b.sni) params.sni = b.sni;
+            if (b.fingerprint) params.fp = b.fingerprint;
+            if (b.publicKey) params.pbk = b.publicKey;
+            if (b.shortId) params.sid = b.shortId;
+            params.encryption = 'none';
+          }
+        }
+        return params;
+      },
+      buildProxyBuilderLink() {
+        const b = this.proxyBuilder;
+        const host = (b.host || '').trim();
+        const linkHost = this.proxyBuilderLinkHost(host);
+        const port = Number(b.port || 0);
+        const remark = encodeURIComponent(b.tag || `proxy-${b.type}`);
+        if (!host || !port) return '';
+        switch (b.type) {
+          case 'vmess': {
+            const vmess = {
+              v: '2',
+              ps: b.tag || `proxy-vmess-${port}`,
+              add: host,
+              port: String(port),
+              id: b.uuid || '',
+              aid: '0',
+              scy: b.security || 'auto',
+              net: b.network || 'tcp',
+              type: 'none',
+              host: b.headerHost || '',
+              path: b.path || '/',
+              tls: b.transportSecurity === 'tls' ? 'tls' : '',
+              sni: b.sni || '',
+              fp: b.fingerprint || '',
+            };
+            return 'vmess://' + Base64.encode(JSON.stringify(vmess));
+          }
+          case 'vless': {
+            const params = Object.assign({ encryption: 'none' }, this.proxyBuilderTransportParams());
+            if (b.flow) params.flow = b.flow;
+            return `vless://${encodeURIComponent(b.uuid || '')}@${linkHost}:${port}${this.proxyBuilderQuery(params)}#${remark}`;
+          }
+          case 'trojan': {
+            return `trojan://${encodeURIComponent(b.password || '')}@${linkHost}:${port}${this.proxyBuilderQuery(this.proxyBuilderTransportParams())}#${remark}`;
+          }
+          case 'shadowsocks': {
+            const auth = Base64.encode(`${b.method || 'chacha20-ietf-poly1305'}:${b.password || ''}`).replace(/=+$/,'');
+            return `ss://${auth}@${linkHost}:${port}#${remark}`;
+          }
+          case 'hysteria2': {
+            const params = {
+              security: 'tls',
+              sni: b.sni,
+              insecure: b.insecure ? 1 : undefined,
+              alpn: b.alpn,
+              congestion: b.hyCongestion,
+              up: b.hyUp,
+              down: b.hyDown,
+              obfs: b.hyObfsPassword ? 'salamander' : undefined,
+              'obfs-password': b.hyObfsPassword,
+            };
+            return `hysteria2://${encodeURIComponent(b.password || '')}@${linkHost}:${port}${this.proxyBuilderQuery(params)}#${remark}`;
+          }
+          case 'socks': {
+            const auth = b.username ? `${encodeURIComponent(b.username)}:${encodeURIComponent(b.password || '')}@` : '';
+            return `socks5://${auth}${linkHost}:${port}#${remark}`;
+          }
+          case 'http': {
+            const auth = b.username ? `${encodeURIComponent(b.username)}:${encodeURIComponent(b.password || '')}@` : '';
+            return `http://${auth}${linkHost}:${port}#${remark}`;
+          }
+          default:
+            return '';
+        }
+      },
+      buildProxyBuilderStream() {
+        const b = this.proxyBuilder;
+        if (b.type === 'hysteria2') {
+          const stream = new StreamSettings('hysteria', 'none');
+          stream.hysteria.auth = b.password || '';
+          stream.hysteria.congestion = b.hyCongestion || '';
+          stream.hysteria.up = b.hyUp || '0';
+          stream.hysteria.down = b.hyDown || '0';
+          return stream;
+        }
+        const stream = new StreamSettings(b.network || 'tcp', b.transportSecurity || 'none');
+        if (b.network === 'tcp') {
+          stream.tcp = new TcpStreamSettings('none', '', '');
+        } else if (b.network === 'ws') {
+          stream.ws = new WsStreamSettings(b.path || '/', b.headerHost || '');
+        } else if (b.network === 'grpc') {
+          stream.grpc = new GrpcStreamSettings(b.serviceName || '', b.headerHost || '', false);
+        } else if (b.network === 'httpupgrade') {
+          stream.httpupgrade = new HttpUpgradeStreamSettings(b.path || '/', b.headerHost || '');
+        } else if (b.network === 'xhttp') {
+          stream.xhttp = new xHTTPStreamSettings(b.path || '/', b.headerHost || '');
+        }
+        if (b.transportSecurity === 'tls') {
+          stream.tls = new TlsStreamSettings(b.sni || '', b.alpn ? b.alpn.split(',').map(s => s.trim()).filter(Boolean) : [], b.fingerprint || '');
+        } else if (b.transportSecurity === 'reality') {
+          stream.reality = new RealityStreamSettings(b.publicKey || '', b.fingerprint || '', b.sni || '', b.shortId || '');
+        }
+        return stream;
+      },
+      buildProxyBuilderOutbound() {
+        const b = this.proxyBuilder;
+        const host = (b.host || '').trim();
+        const port = Number(b.port || 0);
+        if (!host || !port) return null;
+        const tag = b.tag || `proxy-${b.type}-${port}`;
+        const stream = this.buildProxyBuilderStream();
+        if (b.type === 'vmess') {
+          return new Outbound(tag, Protocols.VMess, new Outbound.VmessSettings(host, port, b.uuid || '', b.security || 'auto'), stream).toJson();
+        }
+        if (b.type === 'vless') {
+          return new Outbound(tag, Protocols.VLESS, new Outbound.VLESSSettings(host, port, b.uuid || '', b.flow || '', 'none'), stream).toJson();
+        }
+        if (b.type === 'trojan') {
+          return new Outbound(tag, Protocols.Trojan, new Outbound.TrojanSettings(host, port, b.password || ''), stream).toJson();
+        }
+        if (b.type === 'shadowsocks') {
+          return new Outbound(tag, Protocols.Shadowsocks, new Outbound.ShadowsocksSettings(host, port, b.password || '', b.method || 'chacha20-ietf-poly1305', true), stream).toJson();
+        }
+        if (b.type === 'hysteria2') {
+          return new Outbound(tag, Protocols.Hysteria, new Outbound.HysteriaSettings(host, port, 2), stream).toJson();
+        }
+        if (b.type === 'socks') {
+          return new Outbound(tag, Protocols.Socks, new Outbound.SocksSettings(host, port, b.username || '', b.password || '')).toJson();
+        }
+        if (b.type === 'http') {
+          return new Outbound(tag, Protocols.HTTP, new Outbound.HttpSettings(host, port, b.username || '', b.password || '')).toJson();
+        }
+        if (b.type === 'wireguard') {
+          const peer = new Outbound.WireguardSettings.Peer(
+            b.wgPublicKey || '',
+            '',
+            (b.wgAllowedIPs || '0.0.0.0/0,::/0').split(',').map(s => s.trim()).filter(Boolean),
+            `${host}:${port}`,
+            b.wgKeepAlive || 0
+          );
+          const settings = new Outbound.WireguardSettings(
+            b.wgMtu || 1420,
+            b.wgSecretKey || '',
+            (b.wgAddress || '').split(',').map(s => s.trim()).filter(Boolean),
+            2,
+            'ForceIP',
+            b.wgReserved || '',
+            [peer],
+            true
+          );
+          return new Outbound(tag, Protocols.Wireguard, settings).toJson();
+        }
+        return null;
+      },
+      copyProxyBuilderLink() {
+        const value = this.proxyBuilderLink || this.proxyBuilderJson;
+        if (!value) return this.$message.error('Nothing to copy');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(value)
+            .then(() => this.$message.success('Copied'))
+            .catch(() => this.copyTextFallback(value));
+          return;
+        }
+        this.copyTextFallback(value);
+      },
+      copyTextFallback(value) {
+        const el = document.createElement('textarea');
+        el.value = value;
+        el.setAttribute('readonly', '');
+        el.style.position = 'fixed';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        el.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(el);
+        ok ? this.$message.success('Copied') : this.$message.error('Copy failed');
+      },
+      importProxyBuilderLink() {
+        if (!this.proxyBuilderImportable) return this.$message.warning('Use Add to Outbounds for this proxy type');
+        if (!this.proxyBuilderLink) return this.$message.warning('This type has no standard share link; use Add to Outbounds');
+        const outbound = Outbound.fromLink(this.proxyBuilderLink);
+        if (!outbound) return this.$message.error('Could not parse generated link');
+        outbound.tag = this.proxyBuilder.tag || outbound.tag;
+        outModal.show({
+          title: 'Proxy Builder Import',
+          okText: '{{ i18n "confirm" }}',
+          outbound: outbound.toJson(),
+          isEdit: true,
+          tags: this.ensureTemplateOutbounds().map(obj => obj.tag),
+          confirm: (value) => {
+            const outbounds = this.ensureTemplateOutbounds();
+            outbounds.push(value);
+            this.outboundSettings = JSON.stringify(outbounds);
+          },
+        });
+      },
+      addProxyBuilderOutbound() {
+        const outbound = this.buildProxyBuilderOutbound();
+        if (!outbound) return this.$message.error('Fill required fields first');
+        if (!outbound.tag) return this.$message.error('Tag is required');
+        const outbounds = this.ensureTemplateOutbounds();
+        if (outbounds.some(o => o.tag === outbound.tag)) {
+          return this.$message.error('Outbound tag already exists');
+        }
+        outbounds.push(outbound);
+        this.outboundSettings = JSON.stringify(outbounds);
+        this.$message.success('Outbound added');
       },
       async restartXray() {
         this.loading(true);
@@ -560,7 +1029,7 @@
       findOutboundTraffic(o) {
         for (const otraffic of this.outboundsTraffic) {
           if (otraffic.tag == o.tag) {
-            return `↑ ${SizeFormatter.sizeFormat(otraffic.up)} / ${SizeFormatter.sizeFormat(otraffic.down)} ↓`
+            return `в†‘ ${SizeFormatter.sizeFormat(otraffic.up)} / ${SizeFormatter.sizeFormat(otraffic.down)} в†“`
           }
         }
         return `${SizeFormatter.sizeFormat(0)} / ${SizeFormatter.sizeFormat(0)}`
@@ -1066,6 +1535,7 @@
       await this.getXraySetting();
       await this.getXrayResult();
       await this.getOutboundsTraffic();
+      await this.loadOutboundSubs();
 
       if (window.wsClient) {
           window.wsClient.connect();
@@ -1079,10 +1549,21 @@
 
       while (true) {
         await PromiseUtil.sleep(800);
-        this.saveBtnDisable = this.oldXraySetting === this.xraySetting && this.oldOutboundTestUrl === this.outboundTestUrl;
+        this.saveBtnDisable = this.oldXraySetting === this.xraySetting && this.oldOutboundTestUrl === this.outboundTestUrl && this.oldPanelOutbound === this.panelOutbound;
       }
     },
     computed: {
+      proxyBuilderImportable() {
+        return ['vmess','vless','trojan','shadowsocks','hysteria2'].includes(this.proxyBuilder.type);
+      },
+      proxyBuilderLink() {
+        if (['wireguard'].includes(this.proxyBuilder.type)) return '';
+        return this.buildProxyBuilderLink();
+      },
+      proxyBuilderJson() {
+        const outbound = this.buildProxyBuilderOutbound();
+        return outbound ? JSON.stringify(outbound, null, 2) : '';
+      },
       templateSettings: {
         get: function () {
           const parsedSettings = this.xraySetting ? JSON.parse(this.xraySetting) : null;

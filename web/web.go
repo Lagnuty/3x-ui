@@ -311,6 +311,8 @@ func (s *Server) startTask() {
 			}
 		}
 	})
+	s.cron.AddJob("@every 5m", job.NewOutboundSubscriptionJob())
+	s.cron.AddJob("@every 1m", job.NewNodeHeartbeatJob())
 
 	go func() {
 		time.Sleep(time.Second * 5)

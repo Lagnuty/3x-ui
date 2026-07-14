@@ -1,0 +1,263 @@
+{{define "settings/xray/proxy_builder"}}
+<a-space direction="vertical" size="middle">
+    <a-card hoverable title="Proxy Builder">
+        <template #extra>
+            <a-space>
+                <a-button icon="reload" @click="resetProxyBuilder">Reset</a-button>
+                <a-button type="primary" icon="plus" @click="addProxyBuilderOutbound">Add to Outbounds</a-button>
+            </a-space>
+        </template>
+        <a-alert
+            type="info"
+            message="Build proxy links and Xray outbound JSON directly in the old UI. VMess, VLESS, Trojan, Shadowsocks and Hysteria2 generate share links; HTTP, SOCKS and WireGuard generate outbound JSON."
+            show-icon
+            :style="{ marginBottom: '12px' }">
+        </a-alert>
+        <a-row :gutter="[16, 12]">
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Type">
+                    <a-select v-model="proxyBuilder.type" @change="onProxyBuilderTypeChange">
+                        <a-select-option value="vless">VLESS</a-select-option>
+                        <a-select-option value="vmess">VMess</a-select-option>
+                        <a-select-option value="trojan">Trojan</a-select-option>
+                        <a-select-option value="shadowsocks">Shadowsocks</a-select-option>
+                        <a-select-option value="hysteria2">Hysteria2</a-select-option>
+                        <a-select-option value="socks">SOCKS</a-select-option>
+                        <a-select-option value="http">HTTP</a-select-option>
+                        <a-select-option value="wireguard">WireGuard</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Tag / Remark">
+                    <a-input v-model.trim="proxyBuilder.tag" placeholder="proxy-us-1"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Domain or IP">
+                    <a-input v-model.trim="proxyBuilder.host" placeholder="example.com or 1.2.3.4"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="4">
+                <a-form-item label="Port">
+                    <a-input-number v-model="proxyBuilder.port" :min="1" :max="65535" :style="{ width: '100%' }"></a-input-number>
+                </a-form-item>
+            </a-col>
+        </a-row>
+
+        <a-row :gutter="[16, 12]" v-if="['vless','vmess','trojan','shadowsocks','hysteria2','socks','http'].includes(proxyBuilder.type)">
+            <a-col :xs="24" :md="8" v-if="['vless','vmess'].includes(proxyBuilder.type)">
+                <a-form-item label="UUID">
+                    <a-input v-model.trim="proxyBuilder.uuid"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="['trojan','shadowsocks','hysteria2'].includes(proxyBuilder.type)">
+                <a-form-item label="Password">
+                    <a-input-password v-model.trim="proxyBuilder.password"></a-input-password>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="['socks','http'].includes(proxyBuilder.type)">
+                <a-form-item label="Username">
+                    <a-input v-model.trim="proxyBuilder.username"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="['socks','http'].includes(proxyBuilder.type)">
+                <a-form-item label="Password">
+                    <a-input-password v-model.trim="proxyBuilder.password"></a-input-password>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="proxyBuilder.type === 'shadowsocks'">
+                <a-form-item label="Method">
+                    <a-select v-model="proxyBuilder.method">
+                        <a-select-option v-for="m in proxyBuilder.ssMethods" :key="m" :value="m">[[ m ]]</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="proxyBuilder.type === 'vmess'">
+                <a-form-item label="Security">
+                    <a-select v-model="proxyBuilder.security">
+                        <a-select-option value="auto">auto</a-select-option>
+                        <a-select-option value="aes-128-gcm">aes-128-gcm</a-select-option>
+                        <a-select-option value="chacha20-poly1305">chacha20-poly1305</a-select-option>
+                        <a-select-option value="none">none</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="proxyBuilder.type === 'vless'">
+                <a-form-item label="Flow">
+                    <a-select v-model="proxyBuilder.flow" allow-clear>
+                        <a-select-option value="">none</a-select-option>
+                        <a-select-option value="xtls-rprx-vision">xtls-rprx-vision</a-select-option>
+                        <a-select-option value="xtls-rprx-vision-udp443">xtls-rprx-vision-udp443</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+        </a-row>
+
+        <a-row :gutter="[16, 12]" v-if="proxyBuilder.type === 'wireguard'">
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Secret Key">
+                    <a-input-password v-model.trim="proxyBuilder.wgSecretKey"></a-input-password>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Peer Public Key">
+                    <a-input v-model.trim="proxyBuilder.wgPublicKey"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Local Address">
+                    <a-input v-model.trim="proxyBuilder.wgAddress" placeholder="172.16.0.2/32,2606:.../128"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Allowed IPs">
+                    <a-input v-model.trim="proxyBuilder.wgAllowedIPs" placeholder="0.0.0.0/0,::/0"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Reserved">
+                    <a-input v-model.trim="proxyBuilder.wgReserved" placeholder="1,2,3"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="4">
+                <a-form-item label="MTU">
+                    <a-input-number v-model="proxyBuilder.wgMtu" :min="576" :max="9000" :style="{ width: '100%' }"></a-input-number>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="4">
+                <a-form-item label="Keepalive">
+                    <a-input-number v-model="proxyBuilder.wgKeepAlive" :min="0" :max="300" :style="{ width: '100%' }"></a-input-number>
+                </a-form-item>
+            </a-col>
+        </a-row>
+
+        <a-divider orientation="left">Transport</a-divider>
+        <a-row :gutter="[16, 12]" v-if="['vless','vmess','trojan','shadowsocks'].includes(proxyBuilder.type)">
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Network">
+                    <a-select v-model="proxyBuilder.network">
+                        <a-select-option value="tcp">tcp</a-select-option>
+                        <a-select-option value="ws">ws</a-select-option>
+                        <a-select-option value="grpc">grpc</a-select-option>
+                        <a-select-option value="httpupgrade">httpupgrade</a-select-option>
+                        <a-select-option value="xhttp">xhttp</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Security">
+                    <a-select v-model="proxyBuilder.transportSecurity">
+                        <a-select-option value="none">none</a-select-option>
+                        <a-select-option value="tls">tls</a-select-option>
+                        <a-select-option value="reality" v-if="['vless','trojan'].includes(proxyBuilder.type)">reality</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="SNI / Server Name">
+                    <a-input v-model.trim="proxyBuilder.sni"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Fingerprint">
+                    <a-select v-model="proxyBuilder.fingerprint" allow-clear>
+                        <a-select-option value="">none</a-select-option>
+                        <a-select-option value="chrome">chrome</a-select-option>
+                        <a-select-option value="firefox">firefox</a-select-option>
+                        <a-select-option value="safari">safari</a-select-option>
+                        <a-select-option value="ios">ios</a-select-option>
+                        <a-select-option value="android">android</a-select-option>
+                        <a-select-option value="randomized">randomized</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="['ws','httpupgrade','xhttp'].includes(proxyBuilder.network)">
+                <a-form-item label="Path">
+                    <a-input v-model.trim="proxyBuilder.path" placeholder="/path"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="['ws','httpupgrade','xhttp'].includes(proxyBuilder.network)">
+                <a-form-item label="Host header">
+                    <a-input v-model.trim="proxyBuilder.headerHost"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="proxyBuilder.network === 'grpc'">
+                <a-form-item label="Service Name">
+                    <a-input v-model.trim="proxyBuilder.serviceName"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="proxyBuilder.transportSecurity === 'reality'">
+                <a-form-item label="Reality Public Key">
+                    <a-input v-model.trim="proxyBuilder.publicKey"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8" v-if="proxyBuilder.transportSecurity === 'reality'">
+                <a-form-item label="Short ID">
+                    <a-input v-model.trim="proxyBuilder.shortId"></a-input>
+                </a-form-item>
+            </a-col>
+        </a-row>
+
+        <a-row :gutter="[16, 12]" v-if="proxyBuilder.type === 'hysteria2'">
+            <a-col :xs="24" :md="6">
+                <a-form-item label="SNI">
+                    <a-input v-model.trim="proxyBuilder.sni"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Congestion">
+                    <a-select v-model="proxyBuilder.hyCongestion" allow-clear>
+                        <a-select-option value="">none</a-select-option>
+                        <a-select-option value="bbr">bbr</a-select-option>
+                        <a-select-option value="brutal">brutal</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Upload">
+                    <a-input v-model.trim="proxyBuilder.hyUp" placeholder="100 mbps"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="6">
+                <a-form-item label="Download">
+                    <a-input v-model.trim="proxyBuilder.hyDown" placeholder="100 mbps"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Obfs Password">
+                    <a-input-password v-model.trim="proxyBuilder.hyObfsPassword"></a-input-password>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="ALPN">
+                    <a-input v-model.trim="proxyBuilder.alpn" placeholder="h3"></a-input>
+                </a-form-item>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <a-form-item label="Insecure">
+                    <a-switch v-model="proxyBuilder.insecure"></a-switch>
+                </a-form-item>
+            </a-col>
+        </a-row>
+
+        <a-divider orientation="left">Output</a-divider>
+        <a-row :gutter="[16, 12]">
+            <a-col :xs="24" :md="12">
+                <a-form-item label="Generated Link">
+                    <a-textarea :value="proxyBuilderLink" :autosize="{ minRows: 4, maxRows: 8 }" readonly></a-textarea>
+                </a-form-item>
+                <a-space>
+                    <a-button icon="copy" @click="copyProxyBuilderLink">Copy link</a-button>
+                    <a-button icon="swap" :disabled="!proxyBuilderImportable" @click="importProxyBuilderLink">Import link into outbound form</a-button>
+                </a-space>
+            </a-col>
+            <a-col :xs="24" :md="12">
+                <a-form-item label="Generated Outbound JSON">
+                    <a-textarea :value="proxyBuilderJson" :autosize="{ minRows: 8, maxRows: 16 }" readonly></a-textarea>
+                </a-form-item>
+            </a-col>
+        </a-row>
+    </a-card>
+</a-space>
+{{end}}

@@ -1,0 +1,170 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loading" :delay="300" tip='{{ i18n "loading"}}'>
+        <a-row :gutter="[16, 16]">
+          <a-col>
+            <a-card hoverable>
+              <template #title>
+                <a-space direction="horizontal">
+                  <a-button type="primary" icon="plus" @click="openCreate">Create group</a-button>
+                  <a-button icon="reload" @click="loadGroups">Refresh</a-button>
+                </a-space>
+              </template>
+              <a-table
+                size="small"
+                row-key="name"
+                :columns="columns"
+                :data-source="groups"
+                :pagination="{ pageSize: 20 }"
+                :scroll="{ x: 760 }">
+                <template slot="traffic" slot-scope="text, row">
+                  [[ sizeFormat(row.trafficUsed) ]]
+                </template>
+                <template slot="upDown" slot-scope="text, row">
+                  [[ sizeFormat(row.up) ]] / [[ sizeFormat(row.down) ]]
+                </template>
+                <template slot="actions" slot-scope="text, row">
+                  <a-space>
+                    <a-button size="small" icon="eye" @click="showEmails(row)">Emails</a-button>
+                    <a-button size="small" icon="edit" @click="openRename(row)">Rename</a-button>
+                    <a-popconfirm title="Delete group and clear it from clients?" @confirm="deleteGroup(row)">
+                      <a-button size="small" icon="delete" type="danger">Delete</a-button>
+                    </a-popconfirm>
+                  </a-space>
+                </template>
+              </a-table>
+            </a-card>
+          </a-col>
+        </a-row>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+
+  <a-modal
+    v-model="groupModal.visible"
+    :title="groupModal.mode === 'create' ? 'Create group' : 'Rename group'"
+    @ok="saveGroup">
+    <a-form layout="vertical">
+      <a-form-item label="Name">
+        <a-input v-model.trim="groupModal.name" @press-enter="saveGroup"></a-input>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model="emailsModal.visible" :title="`Emails: ${emailsModal.name}`" :footer="null" width="640px">
+    <a-empty v-if="emailsModal.emails.length === 0"></a-empty>
+    <a-list v-else size="small" bordered :data-source="emailsModal.emails">
+      <a-list-item slot="renderItem" slot-scope="email">[[ email ]]</a-list-item>
+    </a-list>
+  </a-modal>
+</a-layout>
+
+{{ template "page/body_scripts" .}}
+<script>
+  const app = new Vue({
+    delimiters: ['[[', ']]'],
+    el: '#app',
+    data() {
+      return {
+        loading: false,
+        groups: [],
+        groupModal: {
+          visible: false,
+          mode: 'create',
+          oldName: '',
+          name: '',
+        },
+        emailsModal: {
+          visible: false,
+          name: '',
+          emails: [],
+        },
+        columns: [
+          { title: 'Name', dataIndex: 'name', key: 'name' },
+          { title: 'Clients', dataIndex: 'clientCount', key: 'clientCount', width: 110 },
+          { title: 'Traffic', key: 'traffic', scopedSlots: { customRender: 'traffic' }, width: 160 },
+          { title: 'Up / Down', key: 'upDown', scopedSlots: { customRender: 'upDown' }, width: 220 },
+          { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 260 },
+        ],
+      };
+    },
+    mounted() {
+      this.loadGroups();
+    },
+    methods: {
+      sizeFormat(value) {
+        if (window.SizeFormatter && SizeFormatter.sizeFormat) {
+          return SizeFormatter.sizeFormat(value || 0);
+        }
+        return `${value || 0} B`;
+      },
+      async loadGroups() {
+        this.loading = true;
+        try {
+          const res = await axios.get('panel/api/clients/groups');
+          if (res.data && res.data.success) {
+            this.groups = res.data.obj || [];
+          } else {
+            this.$message.error(res.data.msg || 'Unable to load groups');
+          }
+        } finally {
+          this.loading = false;
+        }
+      },
+      openCreate() {
+        this.groupModal = { visible: true, mode: 'create', oldName: '', name: '' };
+      },
+      openRename(row) {
+        this.groupModal = { visible: true, mode: 'rename', oldName: row.name, name: row.name };
+      },
+      async saveGroup() {
+        if (!this.groupModal.name) {
+          this.$message.warning('Group name is required');
+          return;
+        }
+        const url = this.groupModal.mode === 'create'
+          ? 'panel/api/clients/groups/create'
+          : 'panel/api/clients/groups/rename';
+        const body = this.groupModal.mode === 'create'
+          ? { name: this.groupModal.name }
+          : { oldName: this.groupModal.oldName, newName: this.groupModal.name };
+        const res = await axios.post(url, body);
+        if (res.data && res.data.success) {
+          this.groupModal.visible = false;
+          this.$message.success('Saved');
+          this.loadGroups();
+        } else {
+          this.$message.error(res.data.msg || 'Save failed');
+        }
+      },
+      async deleteGroup(row) {
+        const res = await axios.post('panel/api/clients/groups/delete', { name: row.name });
+        if (res.data && res.data.success) {
+          this.$message.success('Deleted');
+          this.loadGroups();
+        } else {
+          this.$message.error(res.data.msg || 'Delete failed');
+        }
+      },
+      async showEmails(row) {
+        const res = await axios.get(`panel/api/clients/groups/${encodeURIComponent(row.name)}/emails`);
+        if (res.data && res.data.success) {
+          this.emailsModal = {
+            visible: true,
+            name: row.name,
+            emails: res.data.obj || [],
+          };
+        } else {
+          this.$message.error(res.data.msg || 'Unable to load emails');
+        }
+      },
+    },
+  });
+</script>
+{{ template "page/body_end" .}}

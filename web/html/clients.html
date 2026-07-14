@@ -1,0 +1,348 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loading" :delay="300" tip='{{ i18n "loading"}}'>
+        <a-row :gutter="[16, 16]">
+          <a-col>
+            <a-card hoverable>
+              <template #title>
+                <a-space direction="horizontal">
+                  <a-input-search v-model="search" placeholder="Search email, group, uuid" allow-clear :style="{ width: isMobile ? '100%' : '320px' }"></a-input-search>
+                  <a-button icon="reload" @click="loadClients">Refresh</a-button>
+                  <a-button icon="plus-circle" :disabled="selectedEmails.length === 0" @click="openBulkAdjust">Bulk adjust</a-button>
+                  <a-popconfirm title="Reset traffic for selected clients?" @confirm="bulkResetTraffic">
+                    <a-button icon="redo" :disabled="selectedEmails.length === 0">Bulk reset</a-button>
+                  </a-popconfirm>
+                  <a-popconfirm title="Delete selected clients from all inbounds?" @confirm="bulkDelete">
+                    <a-button icon="delete" type="danger" :disabled="selectedEmails.length === 0">Bulk delete</a-button>
+                  </a-popconfirm>
+                </a-space>
+              </template>
+              <a-table
+                size="small"
+                row-key="email"
+                :columns="columns"
+                :data-source="filteredClients"
+                :row-selection="rowSelection"
+                :pagination="{ pageSize: 20 }"
+                :scroll="{ x: 1080 }">
+                <template slot="enabled" slot-scope="text, row">
+                  <a-tag :color="row.enable ? 'green' : 'red'">[[ row.enable ? 'Enabled' : 'Disabled' ]]</a-tag>
+                </template>
+                <template slot="group" slot-scope="text, row">
+                  <a-tag v-if="row.group">[[ row.group ]]</a-tag>
+                  <span v-else>-</span>
+                </template>
+                <template slot="inbounds" slot-scope="text, row">
+                  <a-tag v-for="id in row.inboundIds" :key="id">#[[ id ]]</a-tag>
+                  <span v-if="!row.inboundIds || row.inboundIds.length === 0">-</span>
+                </template>
+                <template slot="traffic" slot-scope="text, row">
+                  <span>Up [[ sizeFormat(row.traffic && row.traffic.up) ]] / Down [[ sizeFormat(row.traffic && row.traffic.down) ]]</span>
+                  <div :style="{ color: 'var(--ant-secondary-color)' }">[[ sizeFormat(trafficUsed(row)) ]] / [[ limitText(row) ]]</div>
+                </template>
+                <template slot="expiry" slot-scope="text, row">
+                  [[ expiryText(row.expiryTime) ]]
+                </template>
+                <template slot="actions" slot-scope="text, row">
+                  <a-space>
+                    <a-button size="small" icon="area-chart" @click="openTraffic(row)">Traffic</a-button>
+                    <a-popconfirm title="Reset traffic for this client?" @confirm="resetTraffic(row)">
+                      <a-button size="small" icon="redo">Reset</a-button>
+                    </a-popconfirm>
+                    <a-button size="small" icon="link" @click="openAttach(row)">Attach</a-button>
+                    <a-button size="small" icon="disconnect" @click="openDetach(row)">Detach</a-button>
+                    <a-button size="small" icon="global" @click="showIps(row)">IPs</a-button>
+                  </a-space>
+                </template>
+              </a-table>
+            </a-card>
+          </a-col>
+        </a-row>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+
+  <a-modal v-model="trafficModal.visible" :title="`Traffic: ${trafficModal.email}`" @ok="saveTraffic">
+    <a-form layout="vertical">
+      <a-form-item label="Upload, GB">
+        <a-input-number v-model="trafficModal.upGB" :min="0" :step="0.1" :style="{ width: '100%' }"></a-input-number>
+      </a-form-item>
+      <a-form-item label="Download, GB">
+        <a-input-number v-model="trafficModal.downGB" :min="0" :step="0.1" :style="{ width: '100%' }"></a-input-number>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal
+    v-model="attachModal.visible"
+    :title="`${attachModal.mode === 'attach' ? 'Attach' : 'Detach'}: ${attachModal.email}`"
+    @ok="saveAttach">
+    <a-form layout="vertical">
+      <a-form-item label="Inbounds">
+        <a-select v-model="attachModal.inboundIds" mode="multiple" :style="{ width: '100%' }" placeholder="Select inbounds">
+          <a-select-option v-for="item in inboundOptions" :key="item.value" :value="item.value">
+            [[ item.label ]]
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model="bulkAdjustModal.visible" title="Bulk adjust selected clients" @ok="bulkAdjust">
+    <a-form layout="vertical">
+      <a-form-item label="Add days">
+        <a-input-number v-model="bulkAdjustModal.addDays" :step="1" :style="{ width: '100%' }"></a-input-number>
+      </a-form-item>
+      <a-form-item label="Add traffic quota, GB">
+        <a-input-number v-model="bulkAdjustModal.addGB" :step="1" :style="{ width: '100%' }"></a-input-number>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model="ipsModal.visible" :title="`IPs: ${ipsModal.email}`" :footer="null" width="640px">
+    <a-empty v-if="ipsModal.items.length === 0"></a-empty>
+    <a-list v-else size="small" bordered :data-source="ipsModal.items">
+      <a-list-item slot="renderItem" slot-scope="ip">[[ ip ]]</a-list-item>
+    </a-list>
+  </a-modal>
+</a-layout>
+
+{{ template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+<script>
+  const app = new Vue({
+    delimiters: ['[[', ']]'],
+    mixins: [MediaQueryMixin],
+    el: '#app',
+    data() {
+      return {
+        themeSwitcher,
+        loading: false,
+        search: '',
+        clients: [],
+        selectedEmails: [],
+        inboundOptions: [],
+        trafficModal: {
+          visible: false,
+          email: '',
+          upGB: 0,
+          downGB: 0,
+        },
+        attachModal: {
+          visible: false,
+          mode: 'attach',
+          email: '',
+          inboundIds: [],
+        },
+        ipsModal: {
+          visible: false,
+          email: '',
+          items: [],
+        },
+        bulkAdjustModal: {
+          visible: false,
+          addDays: 0,
+          addGB: 0,
+        },
+        columns: [
+          { title: 'Email', dataIndex: 'email', key: 'email', width: 220 },
+          { title: 'Status', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 110 },
+          { title: 'Group', key: 'group', scopedSlots: { customRender: 'group' }, width: 140 },
+          { title: 'Inbounds', key: 'inbounds', scopedSlots: { customRender: 'inbounds' }, width: 180 },
+          { title: 'Traffic', key: 'traffic', scopedSlots: { customRender: 'traffic' }, width: 260 },
+          { title: 'Expiry', key: 'expiry', scopedSlots: { customRender: 'expiry' }, width: 180 },
+          { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 320 },
+        ],
+      };
+    },
+    computed: {
+      filteredClients() {
+        const needle = this.search.trim().toLowerCase();
+        if (!needle) return this.clients;
+        return this.clients.filter(row => {
+          return [row.email, row.group, row.uuid, row.subId]
+            .filter(Boolean)
+            .some(value => String(value).toLowerCase().includes(needle));
+        });
+      },
+      rowSelection() {
+        return {
+          selectedRowKeys: this.selectedEmails,
+          onChange: keys => {
+            this.selectedEmails = keys;
+          },
+        };
+      },
+    },
+    mounted() {
+      this.loadClients();
+      this.loadInbounds();
+    },
+    methods: {
+      async loadInbounds() {
+        const res = await axios.get('panel/api/inbounds/list');
+        if (res.data && res.data.success) {
+          this.inboundOptions = (res.data.obj || []).map(item => ({
+            value: item.id,
+            label: `${item.remark || item.tag || item.id} (#${item.id}, ${item.protocol}:${item.port})`,
+          }));
+        }
+      },
+      async loadClients() {
+        this.loading = true;
+        try {
+          const res = await axios.get('panel/api/clients/list');
+          if (res.data && res.data.success) {
+            this.clients = res.data.obj || [];
+            const existing = new Set(this.clients.map(row => row.email));
+            this.selectedEmails = this.selectedEmails.filter(email => existing.has(email));
+          } else {
+            this.$message.error(res.data.msg || 'Unable to load clients');
+          }
+        } finally {
+          this.loading = false;
+        }
+      },
+      sizeFormat(value) {
+        if (window.SizeFormatter && SizeFormatter.sizeFormat) {
+          return SizeFormatter.sizeFormat(value || 0);
+        }
+        return `${value || 0} B`;
+      },
+      trafficUsed(row) {
+        if (!row.traffic) return 0;
+        return (row.traffic.up || 0) + (row.traffic.down || 0);
+      },
+      limitText(row) {
+        return row.totalGB > 0 ? this.sizeFormat(row.totalGB) : 'Unlimited';
+      },
+      expiryText(value) {
+        if (!value || value < 0) return 'Never';
+        return new Date(value).toLocaleString();
+      },
+      openTraffic(row) {
+        const up = row.traffic ? row.traffic.up || 0 : 0;
+        const down = row.traffic ? row.traffic.down || 0 : 0;
+        this.trafficModal = {
+          visible: true,
+          email: row.email,
+          upGB: Number((up / SizeFormatter.ONE_GB).toFixed(3)),
+          downGB: Number((down / SizeFormatter.ONE_GB).toFixed(3)),
+        };
+      },
+      openAttach(row) {
+        this.attachModal = {
+          visible: true,
+          mode: 'attach',
+          email: row.email,
+          inboundIds: [],
+        };
+      },
+      openDetach(row) {
+        this.attachModal = {
+          visible: true,
+          mode: 'detach',
+          email: row.email,
+          inboundIds: [...(row.inboundIds || [])],
+        };
+      },
+      async saveAttach() {
+        if (!this.attachModal.inboundIds.length) {
+          this.$message.warning('Select at least one inbound');
+          return;
+        }
+        const path = this.attachModal.mode === 'attach' ? 'attach' : 'detach';
+        const res = await axios.post(`panel/api/clients/${encodeURIComponent(this.attachModal.email)}/${path}`, {
+          inboundIds: this.attachModal.inboundIds,
+        });
+        if (res.data && res.data.success) {
+          this.$message.success('Saved');
+          this.attachModal.visible = false;
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Save failed');
+        }
+      },
+      async saveTraffic() {
+        const body = {
+          upload: Math.round(this.trafficModal.upGB * SizeFormatter.ONE_GB),
+          download: Math.round(this.trafficModal.downGB * SizeFormatter.ONE_GB),
+        };
+        const res = await axios.post(`panel/api/clients/updateTraffic/${encodeURIComponent(this.trafficModal.email)}`, body);
+        if (res.data && res.data.success) {
+          this.$message.success('Saved');
+          this.trafficModal.visible = false;
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Save failed');
+        }
+      },
+      async resetTraffic(row) {
+        const res = await axios.post(`panel/api/clients/resetTraffic/${encodeURIComponent(row.email)}`);
+        if (res.data && res.data.success) {
+          this.$message.success('Reset');
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Reset failed');
+        }
+      },
+      openBulkAdjust() {
+        this.bulkAdjustModal = { visible: true, addDays: 0, addGB: 0 };
+      },
+      async bulkAdjust() {
+        const res = await axios.post('panel/api/clients/bulkAdjust', {
+          emails: this.selectedEmails,
+          addDays: this.bulkAdjustModal.addDays || 0,
+          addBytes: Math.round((this.bulkAdjustModal.addGB || 0) * SizeFormatter.ONE_GB),
+        });
+        if (res.data && res.data.success) {
+          this.$message.success(`Updated ${res.data.obj.affected || 0} client(s)`);
+          this.bulkAdjustModal.visible = false;
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Bulk adjust failed');
+        }
+      },
+      async bulkResetTraffic() {
+        const res = await axios.post('panel/api/clients/bulkResetTraffic', { emails: this.selectedEmails });
+        if (res.data && res.data.success) {
+          this.$message.success(`Reset ${res.data.obj.affected || 0} client(s)`);
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Bulk reset failed');
+        }
+      },
+      async bulkDelete() {
+        const res = await axios.post('panel/api/clients/bulkDel', { emails: this.selectedEmails, keepTraffic: false });
+        if (res.data && res.data.success) {
+          this.$message.success(`Deleted ${res.data.obj.affected || 0} client(s)`);
+          this.selectedEmails = [];
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Bulk delete failed');
+        }
+      },
+      async showIps(row) {
+        const res = await axios.post(`panel/api/clients/ips/${encodeURIComponent(row.email)}`);
+        if (res.data && res.data.success) {
+          const obj = res.data.obj;
+          this.ipsModal = {
+            visible: true,
+            email: row.email,
+            items: Array.isArray(obj) ? obj : (obj && obj !== 'No IP Record' ? [String(obj)] : []),
+          };
+        } else {
+          this.$message.error(res.data.msg || 'Unable to load IPs');
+        }
+      },
+    },
+  });
+</script>
+{{ template "page/body_end" .}}
