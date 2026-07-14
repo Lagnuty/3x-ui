@@ -66,6 +66,8 @@
 </a-layout>
 
 {{ template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
 <script>
   const app = new Vue({
     delimiters: ['[[', ']]'],

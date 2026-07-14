@@ -48,17 +48,17 @@ func (a *XUIController) inbounds(c *gin.Context) {
 
 // clients renders the global clients management page.
 func (a *XUIController) clients(c *gin.Context) {
-	html(c, "clients.html", "clients", nil)
+	html(c, "clients.html", "menu.clients", nil)
 }
 
 // groups renders the client groups management page.
 func (a *XUIController) groups(c *gin.Context) {
-	html(c, "groups.html", "clients", nil)
+	html(c, "groups.html", "menu.groups", nil)
 }
 
 // nodes renders the nodes management page.
 func (a *XUIController) nodes(c *gin.Context) {
-	html(c, "nodes.html", "nodes", nil)
+	html(c, "nodes.html", "menu.nodes", nil)
 }
 
 // settings renders the settings management page.
