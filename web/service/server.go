@@ -814,6 +814,9 @@ func (s *ServerService) UpdateXray(version string) error {
 		err = copyZipFile("xray.exe", targetBinary)
 	} else {
 		err = copyZipFile("xray", xray.GetBinaryPath())
+		if err == nil {
+			err = os.Chmod(xray.GetBinaryPath(), 0755)
+		}
 	}
 	if err != nil {
 		return err

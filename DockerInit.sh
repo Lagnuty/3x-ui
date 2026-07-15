@@ -36,6 +36,7 @@ curl -sfLRO "https://github.com/${XRAY_REPO}/releases/download/${XRAY_VERSION}/X
 unzip "Xray-linux-${ARCH}.zip"
 rm -f "Xray-linux-${ARCH}.zip" geoip.dat geosite.dat
 mv xray "xray-linux-${FNAME}"
+chmod +x "xray-linux-${FNAME}"
 printf "%s\n" "${XRAY_VERSION_LABEL}" > xray-version.txt
 curl -sfLRO https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
 curl -sfLRO https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
