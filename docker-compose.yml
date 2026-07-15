@@ -6,7 +6,7 @@ services:
       args:
         XRAY_REPO: ${XRAY_REPO:-Lagnuty/Xray-core}
         XRAY_VERSION: ${XRAY_VERSION:-v26.7.11-lagnuty.2}
-        XRAY_VERSION_LABEL: ${XRAY_VERSION_LABEL:-26.7.11-lagnuty.1}
+        XRAY_VERSION_LABEL: ${XRAY_VERSION_LABEL:-26.7.11-lagnuty.2}
     container_name: 3xui_app
     # hostname: yourhostname <- optional
     volumes:
