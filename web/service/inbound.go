@@ -2420,6 +2420,8 @@ func (s *InboundService) MigrationRequirements() {
 		return
 	}
 	for inbound_index := range inbounds {
+		settingsChanged := false
+		streamSettingsChanged := false
 		settings := map[string]any{}
 		json.Unmarshal([]byte(inbounds[inbound_index].Settings), &settings)
 		clients, ok := settings["clients"].([]any)
@@ -2432,6 +2434,7 @@ func (s *InboundService) MigrationRequirements() {
 				// Add email='' if it is not exists
 				if _, ok := c["email"]; !ok {
 					c["email"] = ""
+					settingsChanged = true
 				}
 
 				// Convert string tgId to int64
@@ -2441,6 +2444,7 @@ func (s *InboundService) MigrationRequirements() {
 						tgIdInt64, err := strconv.ParseInt(strings.ReplaceAll(tgIdStr, " ", ""), 10, 64)
 						if err == nil {
 							c["tgId"] = tgIdInt64
+							settingsChanged = true
 						}
 					}
 				}
@@ -2449,22 +2453,36 @@ func (s *InboundService) MigrationRequirements() {
 				if _, ok := c["flow"]; ok {
 					if c["flow"] == "xtls-rprx-direct" {
 						c["flow"] = ""
+						settingsChanged = true
 					}
 				}
 				// Backfill created_at and updated_at
 				if _, ok := c["created_at"]; !ok {
 					c["created_at"] = time.Now().Unix() * 1000
+					settingsChanged = true
 				}
-				c["updated_at"] = time.Now().Unix() * 1000
+				if _, ok := c["updated_at"]; !ok {
+					c["updated_at"] = time.Now().Unix() * 1000
+					settingsChanged = true
+				}
 				newClients = append(newClients, any(c))
 			}
-			settings["clients"] = newClients
-			modifiedSettings, err := json.MarshalIndent(settings, "", "  ")
-			if err != nil {
-				return
-			}
+			if settingsChanged {
+				settings["clients"] = newClients
+				modifiedSettings, err := json.MarshalIndent(settings, "", "  ")
+				if err != nil {
+					return
+				}
 
-			inbounds[inbound_index].Settings = string(modifiedSettings)
+				inbounds[inbound_index].Settings = string(modifiedSettings)
+			}
+		}
+
+		if inbounds[inbound_index].Protocol == model.Hysteria {
+			if normalized, ok := model.NormalizeHysteriaStreamSettings(inbounds[inbound_index].StreamSettings); ok {
+				inbounds[inbound_index].StreamSettings = normalized
+				streamSettingsChanged = true
+			}
 		}
 
 		// Add client traffic row for all clients which has email
@@ -2481,8 +2499,20 @@ func (s *InboundService) MigrationRequirements() {
 				}
 			}
 		}
+
+		if settingsChanged || streamSettingsChanged {
+			updates := map[string]any{}
+			if settingsChanged {
+				updates["settings"] = inbounds[inbound_index].Settings
+			}
+			if streamSettingsChanged {
+				updates["stream_settings"] = inbounds[inbound_index].StreamSettings
+			}
+			if err = tx.Model(model.Inbound{}).Where("id = ?", inbounds[inbound_index].Id).Updates(updates).Error; err != nil {
+				return
+			}
+		}
 	}
-	tx.Save(inbounds)
 
 	// Remove orphaned traffics
 	tx.Where("inbound_id = 0").Delete(xray.ClientTraffic{})
