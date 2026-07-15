@@ -21,8 +21,16 @@ func (s *ClientService) BulkDelete(inboundSvc *InboundService, emails []string, 
 			continue
 		}
 		inboundIds, err := s.GetInboundIdsForRecord(record.Id)
-		if err != nil || len(inboundIds) == 0 {
+		if err != nil {
 			result.Skipped = append(result.Skipped, email)
+			continue
+		}
+		if len(inboundIds) == 0 {
+			if err := s.deleteOrphanClientRecord(inboundSvc, record, keepTraffic); err != nil {
+				result.Skipped = append(result.Skipped, email)
+				continue
+			}
+			result.Affected++
 			continue
 		}
 		if _, err := s.deleteClientEverywhere(inboundSvc, email, inboundIds, keepTraffic); err != nil {
@@ -33,6 +41,30 @@ func (s *ClientService) BulkDelete(inboundSvc *InboundService, emails []string, 
 		needRestart = true
 	}
 	return result, needRestart, nil
+}
+
+func (s *ClientService) deleteOrphanClientRecord(inboundSvc *InboundService, record *model.ClientRecord, keepTraffic bool) error {
+	db := database.GetDB()
+	tx := db.Begin()
+	if err := tx.Where("client_id = ?", record.Id).Delete(&model.ClientInbound{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if !keepTraffic {
+		if err := inboundSvc.DelClientStat(tx, record.Email); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	if err := inboundSvc.DelClientIPs(tx, record.Email); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Delete(record).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
 }
 
 func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, addDays int, addBytes int64) (*BulkClientResult, bool, error) {

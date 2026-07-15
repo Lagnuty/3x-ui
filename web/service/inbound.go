@@ -363,14 +363,49 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	var clientEmails []string
+	var clientRecordIds []int
 	for _, client := range clients {
+		if client.Email != "" {
+			clientEmails = append(clientEmails, client.Email)
+		}
 		err := s.DelClientIPs(db, client.Email)
 		if err != nil {
 			return false, err
 		}
 	}
+	if len(clientEmails) > 0 {
+		if err := db.Model(model.ClientRecord{}).
+			Where("email IN ?", clientEmails).
+			Pluck("id", &clientRecordIds).Error; err != nil {
+			return false, err
+		}
+	}
 	if err := db.Where("inbound_id = ?", id).Delete(&model.ClientInbound{}).Error; err != nil {
 		return false, err
+	}
+	if len(clientRecordIds) > 0 {
+		var stillAttached []int
+		if err := db.Model(model.ClientInbound{}).
+			Where("client_id IN ?", clientRecordIds).
+			Pluck("client_id", &stillAttached).Error; err != nil {
+			return false, err
+		}
+		stillAttachedSet := make(map[int]bool, len(stillAttached))
+		for _, clientId := range stillAttached {
+			stillAttachedSet[clientId] = true
+		}
+		var orphanIds []int
+		for _, clientId := range clientRecordIds {
+			if !stillAttachedSet[clientId] {
+				orphanIds = append(orphanIds, clientId)
+			}
+		}
+		if len(orphanIds) > 0 {
+			if err := db.Where("id IN ?", orphanIds).Delete(&model.ClientRecord{}).Error; err != nil {
+				return false, err
+			}
+		}
 	}
 
 	return needRestart, db.Delete(model.Inbound{}, id).Error
