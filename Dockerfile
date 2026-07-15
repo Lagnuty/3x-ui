@@ -4,6 +4,9 @@
 FROM golang:1.26-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
+ARG XRAY_REPO=Lagnuty/Xray-core
+ARG XRAY_VERSION=v26.7.11-lagnuty.1
+ARG XRAY_VERSION_LABEL=26.7.11-lagnuty.1
 
 RUN apk --no-cache --update add \
   build-base \

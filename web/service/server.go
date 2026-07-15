@@ -130,6 +130,42 @@ type ServerService struct {
 	lastCpuInfoAttempt time.Time
 }
 
+const (
+	defaultXrayReleaseRepo = "XTLS/Xray-core"
+	customXrayReleaseRepo  = "Lagnuty/Xray-core"
+	customXrayVersion      = "v26.7.11-lagnuty.1"
+)
+
+func getCustomXrayReleaseRepo() string {
+	if repo := strings.TrimSpace(os.Getenv("XRAY_REPO")); repo != "" {
+		return repo
+	}
+	return customXrayReleaseRepo
+}
+
+func getCustomXrayVersion() string {
+	if version := strings.TrimSpace(os.Getenv("XRAY_VERSION")); version != "" {
+		return version
+	}
+	return customXrayVersion
+}
+
+func xrayReleaseRepoForVersion(version string) string {
+	if version == getCustomXrayVersion() || strings.Contains(strings.ToLower(version), "lagnuty") {
+		return getCustomXrayReleaseRepo()
+	}
+	return defaultXrayReleaseRepo
+}
+
+func xrayVersionLabel(version string) string {
+	if version == getCustomXrayVersion() {
+		if label := strings.TrimSpace(os.Getenv("XRAY_VERSION_LABEL")); label != "" {
+			return label
+		}
+	}
+	return strings.TrimPrefix(version, "v")
+}
+
 // AggregateCpuHistory returns up to maxPoints averaged buckets of size bucketSeconds over recent data.
 func (s *ServerService) AggregateCpuHistory(bucketSeconds int, maxPoints int) []map[string]any {
 	if bucketSeconds <= 0 || maxPoints <= 0 {
@@ -625,7 +661,14 @@ func (s *ServerService) GetXrayVersions() ([]string, error) {
 	}
 
 	var versions []string
+	customVersion := getCustomXrayVersion()
+	if customVersion != "" {
+		versions = append(versions, customVersion)
+	}
 	for _, release := range releases {
+		if release.TagName == customVersion {
+			continue
+		}
 		tagVersion := strings.TrimPrefix(release.TagName, "v")
 		tagParts := strings.Split(tagVersion, ".")
 		if len(tagParts) != 3 {
@@ -693,12 +736,16 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 	}
 
 	fileName := fmt.Sprintf("Xray-%s-%s.zip", osName, arch)
-	url := fmt.Sprintf("https://github.com/XTLS/Xray-core/releases/download/%s/%s", version, fileName)
+	repo := xrayReleaseRepoForVersion(version)
+	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, version, fileName)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download Xray from %s: %s", url, resp.Status)
+	}
 
 	os.Remove(fileName)
 	file, err := os.Create(fileName)
@@ -770,6 +817,10 @@ func (s *ServerService) UpdateXray(version string) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	if err := os.WriteFile(xray.GetVersionMarkerPath(), []byte(xrayVersionLabel(version)+"\n"), 0644); err != nil {
+		logger.Warning("failed to write xray version marker:", err)
 	}
 
 	// 5. Restart xray

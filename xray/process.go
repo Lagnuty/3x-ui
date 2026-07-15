@@ -43,6 +43,11 @@ func GetGeoipPath() string {
 	return config.GetBinFolderPath() + "/geoip.dat"
 }
 
+// GetVersionMarkerPath returns the file that stores the packaged Xray release label.
+func GetVersionMarkerPath() string {
+	return config.GetBinFolderPath() + "/xray-version.txt"
+}
+
 // GetIPLimitLogPath returns the path to the IP limit log file.
 func GetIPLimitLogPath() string {
 	return config.GetLogFolder() + "/3xipl.log"
@@ -180,6 +185,28 @@ func (p *process) GetVersion() string {
 	return p.version
 }
 
+func readPackagedVersionLabel() string {
+	data, err := os.ReadFile(GetVersionMarkerPath())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func displayXrayVersion(coreVersion string) string {
+	label := readPackagedVersionLabel()
+	if label == "" {
+		return coreVersion
+	}
+	if coreVersion == "" || coreVersion == "Unknown" {
+		return label
+	}
+	if label == coreVersion || strings.HasPrefix(label, coreVersion+"-") {
+		return label
+	}
+	return fmt.Sprintf("%s (core %s)", label, coreVersion)
+}
+
 // GetAPIPort returns the API port used by the Xray process.
 func (p *Process) GetAPIPort() int {
 	return p.apiPort
@@ -219,14 +246,16 @@ func (p *process) refreshAPIPort() {
 func (p *process) refreshVersion() {
 	cmd := exec.Command(GetBinaryPath(), "-version")
 	data, err := cmd.Output()
+	coreVersion := "Unknown"
 	if err != nil {
-		p.version = "Unknown"
+		p.version = displayXrayVersion(coreVersion)
 	} else {
 		datas := bytes.Split(data, []byte(" "))
 		if len(datas) <= 1 {
-			p.version = "Unknown"
+			p.version = displayXrayVersion(coreVersion)
 		} else {
-			p.version = string(datas[1])
+			coreVersion = string(datas[1])
+			p.version = displayXrayVersion(coreVersion)
 		}
 	}
 }

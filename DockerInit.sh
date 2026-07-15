@@ -27,10 +27,16 @@ case $1 in
 esac
 mkdir -p build/bin
 cd build/bin
-curl -sfLRO "https://github.com/XTLS/Xray-core/releases/download/v26.7.11/Xray-linux-${ARCH}.zip"
+
+XRAY_REPO="${XRAY_REPO:-Lagnuty/Xray-core}"
+XRAY_VERSION="${XRAY_VERSION:-v26.7.11-lagnuty.1}"
+XRAY_VERSION_LABEL="${XRAY_VERSION_LABEL:-${XRAY_VERSION#v}}"
+
+curl -sfLRO "https://github.com/${XRAY_REPO}/releases/download/${XRAY_VERSION}/Xray-linux-${ARCH}.zip"
 unzip "Xray-linux-${ARCH}.zip"
 rm -f "Xray-linux-${ARCH}.zip" geoip.dat geosite.dat
 mv xray "xray-linux-${FNAME}"
+printf "%s\n" "${XRAY_VERSION_LABEL}" > xray-version.txt
 curl -sfLRO https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
 curl -sfLRO https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
 curl -sfLRo geoip_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat

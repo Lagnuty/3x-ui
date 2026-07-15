@@ -99,10 +99,15 @@ The current branch version is stored in `config/version`.
   - `speedLimitUpMbps`
   - `speedLimitDownMbps`
 - Hysteria2 speed limits are emitted into Hysteria settings.
-- Per-client speed limits remain natively enforced only for Hysteria2; for
-  VLESS/VMess/Trojan/Shadowsocks on a shared port, use the inbound-level Linux
-  speed limit because Xray does not expose a universal per-user bandwidth
-  throttle.
+- Docker builds now bundle the custom `Lagnuty/Xray-core`
+  `v26.7.11-lagnuty.1` release, which adds dispatcher-level per-user bandwidth
+  limits for shared inbounds.
+- The panel writes and reads `bin/xray-version.txt`, so the dashboard/status API
+  shows the custom core label (`26.7.11-lagnuty.1`) instead of only the upstream
+  core version (`26.7.11`).
+- The Xray version switcher prepends the custom release and downloads it from
+  `Lagnuty/Xray-core`; upstream versions are still downloaded from
+  `XTLS/Xray-core`.
 
 ## Nodes and bridges
 
