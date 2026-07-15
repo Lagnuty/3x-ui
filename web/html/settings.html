@@ -125,9 +125,31 @@
       entryProtocol: null,
       entryIsIP: false,
       user: {},
+      users: [],
+      userForm: {
+        visible: false,
+        mode: 'create',
+        id: 0,
+        username: '',
+        password: '',
+        role: 'admin',
+        enabled: true,
+      },
+      userRoleOptions: [
+        { label: 'Admin (panel + API)', value: 'admin' },
+        { label: 'API only', value: 'api' },
+      ],
+      userColumns: [
+        { title: 'Username', dataIndex: 'username', key: 'username' },
+        { title: 'Role', key: 'role', scopedSlots: { customRender: 'role' }, width: 160 },
+        { title: 'Enabled', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 120 },
+        { title: 'Updated', key: 'updatedAt', scopedSlots: { customRender: 'updatedAt' }, width: 180 },
+        { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 170 },
+      ],
       apiTokens: [],
       apiTokenForm: {
         name: '',
+        userId: 0,
       },
       createdApiToken: {
         visible: false,
@@ -135,9 +157,21 @@
       },
       apiTokenColumns: [
         { title: 'Name', dataIndex: 'name', key: 'name' },
+        { title: 'User', key: 'userId', scopedSlots: { customRender: 'userId' }, width: 160 },
         { title: 'Enabled', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 120 },
+        { title: 'Last used', key: 'lastUsedAt', scopedSlots: { customRender: 'lastUsedAt' }, width: 180 },
         { title: 'Created', key: 'createdAt', scopedSlots: { customRender: 'createdAt' }, width: 180 },
         { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 120 },
+      ],
+      auditLogs: [],
+      auditLogColumns: [
+        { title: 'Time', key: 'createdAt', scopedSlots: { customRender: 'createdAt' }, width: 180 },
+        { title: 'User', dataIndex: 'username', key: 'username', width: 150 },
+        { title: 'Source', dataIndex: 'source', key: 'source', width: 90 },
+        { title: 'Action', dataIndex: 'action', key: 'action', width: 190 },
+        { title: 'Status', dataIndex: 'status', key: 'status', width: 90 },
+        { title: 'IP', dataIndex: 'ip', key: 'ip', width: 140 },
+        { title: 'Path', dataIndex: 'path', key: 'path' },
       ],
       lang: LanguageManager.getLanguage(),
       inboundOptions: [],
@@ -336,6 +370,61 @@
           sendUpdateUserRequest();
         }
       },
+      async loadUsers() {
+        const msg = await HttpUtil.get("/panel/setting/users");
+        if (msg && msg.success) {
+          this.users = msg.obj || [];
+          if (!this.apiTokenForm.userId && this.users.length) {
+            const apiUser = this.users.find(u => u.role === 'api' && u.enabled);
+            this.apiTokenForm.userId = apiUser ? apiUser.id : this.users[0].id;
+          }
+        }
+      },
+      showCreateUser() {
+        this.userForm = { visible: true, mode: 'create', id: 0, username: '', password: '', role: 'api', enabled: true };
+      },
+      showEditUser(row) {
+        this.userForm = {
+          visible: true,
+          mode: 'edit',
+          id: row.id,
+          username: row.username,
+          password: '',
+          role: row.role || 'admin',
+          enabled: row.enabled,
+        };
+      },
+      async saveManagedUser() {
+        if (!this.userForm.username || (this.userForm.mode === 'create' && !this.userForm.password)) {
+          this.$message.warning('Username and password are required for a new user');
+          return;
+        }
+        const payload = {
+          username: this.userForm.username,
+          password: this.userForm.password,
+          role: this.userForm.role,
+          enabled: this.userForm.enabled,
+        };
+        const url = this.userForm.mode === 'create'
+          ? "/panel/setting/users/create"
+          : `/panel/setting/users/update/${this.userForm.id}`;
+        const msg = await HttpUtil.post(url, payload);
+        if (msg && msg.success) {
+          this.userForm.visible = false;
+          await this.loadUsers();
+        }
+      },
+      async deleteManagedUser(row) {
+        const msg = await HttpUtil.post(`/panel/setting/users/delete/${row.id}`);
+        if (msg && msg.success) {
+          await this.loadUsers();
+        }
+      },
+      userNameById(id) {
+        if (!id) return 'Legacy admin';
+        const user = this.users.find(u => Number(u.id) === Number(id));
+        return user ? user.username : `User #${id}`;
+      },
       async loadApiTokens() {
         const msg = await HttpUtil.get("/panel/setting/apiTokens");
         if (msg && msg.success) {
@@ -347,7 +436,7 @@
           this.$message.warning('Token name is required');
           return;
         }
-        const msg = await HttpUtil.post("/panel/setting/apiTokens/create", { name: this.apiTokenForm.name });
+        const msg = await HttpUtil.post("/panel/setting/apiTokens/create", { name: this.apiTokenForm.name, userId: this.apiTokenForm.userId || 0 });
         if (msg && msg.success) {
           this.apiTokenForm.name = '';
           this.createdApiToken = {
@@ -380,6 +469,12 @@
       formatTimestamp(value) {
         if (!value) return '';
         return new Date(value).toLocaleString();
+      },
+      async loadAuditLogs() {
+        const msg = await HttpUtil.get("/panel/setting/auditLogs?limit=100");
+        if (msg && msg.success) {
+          this.auditLogs = msg.obj || [];
+        }
       },
       async restartPanel() {
         await new Promise(resolve => {
@@ -687,7 +782,9 @@
       this.entryIsIP = this._isIp(this.entryHost);
       await this.getAllSetting();
       await this.loadInboundTags();
+      await this.loadUsers();
       await this.loadApiTokens();
+      await this.loadAuditLogs();
       while (true) {
         await PromiseUtil.sleep(1000);
         this.saveBtnDisable = this.oldAllSetting.equals(this.allSetting);

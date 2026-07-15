@@ -32,21 +32,38 @@ func NewAPIController(g *gin.RouterGroup) *APIController {
 func (a *APIController) checkAPIAuth(c *gin.Context) {
 	if auth := c.GetHeader("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 		token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
-		if a.apiTokenService.Match(token) {
-			user, err := a.userService.GetFirstUser()
-			if err == nil && user != nil {
-				session.SetLoginUser(c, user)
+		if apiToken, ok := a.apiTokenService.Match(token); ok {
+			loginUser, err := a.userService.GetFirstUser()
+			if apiToken.UserId > 0 {
+				loginUser, err = a.userService.GetById(apiToken.UserId)
 			}
+			if err != nil || loginUser == nil || !loginUser.Enabled {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+			session.SetLoginUser(c, loginUser)
+			c.Set("audit_user", loginUser)
 			c.Set("api_authed", true)
+			c.Set("auth_source", "api")
+			c.Set("api_token_id", apiToken.Id)
 			c.Next()
 			return
 		}
 	}
 
-	if !session.IsLogin(c) {
+	loginUser := session.GetLoginUser(c)
+	if loginUser == nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	freshUser, err := a.userService.GetById(loginUser.Id)
+	if err != nil || !freshUser.CanUsePanel() {
+		session.ClearSession(c)
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	session.SetLoginUser(c, freshUser)
+	c.Set("audit_user", freshUser)
 	c.Next()
 }
 
@@ -55,6 +72,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Main API group
 	api := g.Group("/panel/api")
 	api.Use(a.checkAPIAuth)
+	api.Use(a.auditActions)
 
 	// Inbounds API
 	inbounds := api.Group("/inbounds")

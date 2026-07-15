@@ -40,6 +40,7 @@ func initModels() error {
 		&model.HistoryOfSeeders{},
 		&model.Node{},
 		&model.ApiToken{},
+		&model.AuditLog{},
 		&model.ClientRecord{},
 		&model.ClientInbound{},
 		&model.ClientGroup{},
@@ -75,10 +76,23 @@ func initUser() error {
 		user := &model.User{
 			Username: defaultUsername,
 			Password: hashedPassword,
+			Role:     model.UserRoleAdmin,
+			Enabled:  true,
 		}
 		return db.Create(user).Error
 	}
 	return nil
+}
+
+func initUserDefaults() error {
+	if err := db.Model(&model.User{}).
+		Where("role = '' OR role IS NULL").
+		Update("role", model.UserRoleAdmin).Error; err != nil {
+		return err
+	}
+	return db.Model(&model.User{}).
+		Where("enabled IS NULL").
+		Update("enabled", true).Error
 }
 
 // runSeeders migrates user passwords to bcrypt and records seeder execution to prevent re-running.
@@ -162,6 +176,9 @@ func InitDB(dbPath string) error {
 	}
 
 	if err := initUser(); err != nil {
+		return err
+	}
+	if err := initUserDefaults(); err != nil {
 		return err
 	}
 	return runSeeders(isUsersEmpty)

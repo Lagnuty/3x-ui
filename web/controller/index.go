@@ -5,6 +5,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 	"github.com/mhsanaei/3x-ui/v2/web/session"
@@ -26,6 +27,7 @@ type IndexController struct {
 
 	settingService service.SettingService
 	userService    service.UserService
+	auditService   service.AuditService
 	tgbot          service.Tgbot
 }
 
@@ -90,6 +92,17 @@ func (a *IndexController) login(c *gin.Context) {
 			logger.Warningf("failed login: username=%q, IP=%q, reason=%q", safeUser, remoteIP, "invalid credentials")
 		}
 		a.tgbot.UserLoginNotify(safeUser, "", remoteIP, timeStr, 0)
+		_ = a.auditService.Record(&model.AuditLog{
+			Username:  safeUser,
+			Source:    "panel",
+			Action:    "login_failed",
+			Method:    c.Request.Method,
+			Path:      c.Request.URL.Path,
+			Status:    http.StatusOK,
+			IP:        remoteIP,
+			UserAgent: c.Request.UserAgent(),
+			Detail:    "invalid credentials or non-panel role",
+		})
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
 		return
 	}
@@ -111,6 +124,18 @@ func (a *IndexController) login(c *gin.Context) {
 	}
 
 	logger.Infof("%s logged in successfully", safeUser)
+	_ = a.auditService.Record(&model.AuditLog{
+		UserId:    user.Id,
+		Username:  user.Username,
+		Role:      user.NormalizedRole(),
+		Source:    "panel",
+		Action:    "login_success",
+		Method:    c.Request.Method,
+		Path:      c.Request.URL.Path,
+		Status:    http.StatusOK,
+		IP:        remoteIP,
+		UserAgent: c.Request.UserAgent(),
+	})
 	jsonMsg(c, I18nWeb(c, "pages.login.toasts.successLogin"), nil)
 }
 
@@ -119,6 +144,18 @@ func (a *IndexController) logout(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	if user != nil {
 		logger.Infof("%s logged out successfully", user.Username)
+		_ = a.auditService.Record(&model.AuditLog{
+			UserId:    user.Id,
+			Username:  user.Username,
+			Role:      user.NormalizedRole(),
+			Source:    "panel",
+			Action:    "logout",
+			Method:    c.Request.Method,
+			Path:      c.Request.URL.Path,
+			Status:    http.StatusTemporaryRedirect,
+			IP:        getRemoteIp(c),
+			UserAgent: c.Request.UserAgent(),
+		})
 	}
 	session.ClearSession(c)
 	if err := sessions.Default(c).Save(); err != nil {

@@ -27,6 +27,7 @@ type SettingController struct {
 	userService     service.UserService
 	panelService    service.PanelService
 	apiTokenService service.ApiTokenService
+	auditService    service.AuditService
 }
 
 // NewSettingController creates a new SettingController and initializes its routes.
@@ -50,6 +51,11 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/apiTokens/create", a.createApiToken)
 	g.POST("/apiTokens/delete/:id", a.deleteApiToken)
 	g.POST("/apiTokens/setEnabled/:id", a.setApiTokenEnabled)
+	g.GET("/users", a.listUsers)
+	g.POST("/users/create", a.createUser)
+	g.POST("/users/update/:id", a.updateManagedUser)
+	g.POST("/users/delete/:id", a.deleteUser)
+	g.GET("/auditLogs", a.listAuditLogs)
 }
 
 // getAllSetting retrieves all current settings.
@@ -127,7 +133,8 @@ func (a *SettingController) getDefaultXrayConfig(c *gin.Context) {
 }
 
 type apiTokenCreateForm struct {
-	Name string `json:"name" form:"name"`
+	Name   string `json:"name" form:"name"`
+	UserId int    `json:"userId" form:"userId"`
 }
 
 type apiTokenEnabledForm struct {
@@ -145,7 +152,7 @@ func (a *SettingController) createApiToken(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	token, err := a.apiTokenService.Create(form.Name)
+	token, err := a.apiTokenService.Create(form.Name, form.UserId)
 	jsonObj(c, token, err)
 }
 
@@ -171,4 +178,68 @@ func (a *SettingController) setApiTokenEnabled(c *gin.Context) {
 		return
 	}
 	jsonObj(c, nil, a.apiTokenService.SetEnabled(id, form.Enabled))
+}
+
+type managedUserForm struct {
+	Username string `json:"username" form:"username"`
+	Password string `json:"password" form:"password"`
+	Role     string `json:"role" form:"role"`
+	Enabled  bool   `json:"enabled" form:"enabled"`
+}
+
+func (a *SettingController) listUsers(c *gin.Context) {
+	users, err := a.userService.ListUsers()
+	jsonObj(c, users, err)
+}
+
+func (a *SettingController) createUser(c *gin.Context) {
+	form := &managedUserForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	user, err := a.userService.CreateUser(form.Username, form.Password, form.Role, form.Enabled)
+	jsonObj(c, user, err)
+}
+
+func (a *SettingController) updateManagedUser(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	form := &managedUserForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	err = a.userService.UpdateManagedUser(id, form.Username, form.Password, form.Role, form.Enabled)
+	if err == nil {
+		if current := session.GetLoginUser(c); current != nil && current.Id == id {
+			if refreshed, refreshErr := a.userService.GetById(id); refreshErr == nil {
+				session.SetLoginUser(c, refreshed)
+			}
+		}
+	}
+	jsonObj(c, nil, err)
+}
+
+func (a *SettingController) deleteUser(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	jsonObj(c, nil, a.userService.DeleteUser(id))
+}
+
+func (a *SettingController) listAuditLogs(c *gin.Context) {
+	limit := 100
+	if raw := c.Query("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	logs, err := a.auditService.List(limit)
+	jsonObj(c, logs, err)
 }

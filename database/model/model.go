@@ -37,9 +37,33 @@ const (
 // User represents a user account in the 3x-ui panel.
 type User struct {
 	Id         int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Username   string `json:"username"`
+	Username   string `json:"username" gorm:"uniqueIndex;not null"`
 	Password   string `json:"password"`
+	Role       string `json:"role" gorm:"default:admin;index"`
+	Enabled    bool   `json:"enabled" gorm:"default:true;index"`
 	LoginEpoch int64  `json:"-" gorm:"default:0"`
+	CreatedAt  int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt  int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+}
+
+const (
+	UserRoleAdmin = "admin"
+	UserRoleAPI   = "api"
+)
+
+func (u *User) NormalizedRole() string {
+	if u == nil || u.Role == "" {
+		return UserRoleAdmin
+	}
+	return u.Role
+}
+
+func (u *User) IsAdmin() bool {
+	return u != nil && u.NormalizedRole() == UserRoleAdmin
+}
+
+func (u *User) CanUsePanel() bool {
+	return u != nil && u.Enabled && u.IsAdmin()
 }
 
 // Inbound represents an Xray inbound configuration with traffic statistics and settings.
@@ -151,11 +175,31 @@ type HistoryOfSeeders struct {
 }
 
 type ApiToken struct {
+	Id         int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name       string `json:"name" gorm:"uniqueIndex;not null"`
+	Token      string `json:"token" gorm:"not null"` // SHA-256 hash; the plaintext is shown only once at creation
+	UserId     int    `json:"userId" gorm:"index;default:0"`
+	Enabled    bool   `json:"enabled" gorm:"default:true"`
+	CreatedAt  int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt  int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	LastUsedAt int64  `json:"lastUsedAt" gorm:"default:0"`
+}
+
+type AuditLog struct {
 	Id        int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name      string `json:"name" gorm:"uniqueIndex;not null"`
-	Token     string `json:"token" gorm:"not null"` // SHA-256 hash; the plaintext is shown only once at creation
-	Enabled   bool   `json:"enabled" gorm:"default:true"`
-	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UserId    int    `json:"userId" gorm:"index"`
+	Username  string `json:"username" gorm:"index"`
+	Role      string `json:"role"`
+	Source    string `json:"source" gorm:"index"` // panel, api, system
+	TokenId   int    `json:"tokenId,omitempty" gorm:"index"`
+	Action    string `json:"action" gorm:"index"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Status    int    `json:"status"`
+	IP        string `json:"ip"`
+	UserAgent string `json:"userAgent"`
+	Detail    string `json:"detail"`
+	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli;index"`
 }
 
 // MarshalJSON emits settings, streamSettings, and sniffing as nested JSON

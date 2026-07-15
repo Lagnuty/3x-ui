@@ -44,6 +44,11 @@
         <a-list-item>
             <a-space direction="horizontal" :style="{ padding: '0 20px', marginBottom: '12px' }">
                 <a-input v-model.trim="apiTokenForm.name" placeholder="Token name" @press-enter="createApiToken"></a-input>
+                <a-select v-model="apiTokenForm.userId" :style="{ width: '220px' }" placeholder="Token user">
+                    <a-select-option v-for="u in users" :key="u.id" :value="u.id">
+                        [[ u.username ]] ([[ u.role ]])
+                    </a-select-option>
+                </a-select>
                 <a-button type="primary" icon="plus" @click="createApiToken">Create</a-button>
                 <a-button icon="reload" @click="loadApiTokens">Refresh</a-button>
             </a-space>
@@ -57,8 +62,14 @@
                 :pagination="{ pageSize: 10 }"
                 :scroll="{ x: 680 }"
                 :style="{ width: '100%' }">
+                <template slot="userId" slot-scope="text, row">
+                    [[ userNameById(row.userId) ]]
+                </template>
                 <template slot="enabled" slot-scope="text, row">
                     <a-switch :checked="row.enabled" @change="value => setApiTokenEnabled(row, value)"></a-switch>
+                </template>
+                <template slot="lastUsedAt" slot-scope="text, row">
+                    [[ formatTimestamp(row.lastUsedAt) ]]
                 </template>
                 <template slot="createdAt" slot-scope="text, row">
                     [[ formatTimestamp(row.createdAt) ]]
@@ -67,6 +78,63 @@
                     <a-popconfirm title="Delete this API token?" @confirm="deleteApiToken(row)">
                         <a-button size="small" icon="delete" type="danger">Delete</a-button>
                     </a-popconfirm>
+                </template>
+            </a-table>
+        </a-list-item>
+    </a-collapse-panel>
+    <a-collapse-panel key="4" header="Users and access">
+        <a-list-item>
+            <a-space direction="horizontal" :style="{ padding: '0 20px', marginBottom: '12px' }">
+                <a-button type="primary" icon="user-add" @click="showCreateUser">Create user</a-button>
+                <a-button icon="reload" @click="loadUsers">Refresh</a-button>
+            </a-space>
+        </a-list-item>
+        <a-list-item>
+            <a-table
+                size="small"
+                row-key="id"
+                :columns="userColumns"
+                :data-source="users"
+                :pagination="{ pageSize: 10 }"
+                :scroll="{ x: 760 }"
+                :style="{ width: '100%' }">
+                <template slot="role" slot-scope="text, row">
+                    <a-tag :color="row.role === 'admin' ? 'green' : 'blue'">[[ row.role ]]</a-tag>
+                </template>
+                <template slot="enabled" slot-scope="text, row">
+                    <a-tag :color="row.enabled ? 'green' : 'red'">[[ row.enabled ? 'yes' : 'no' ]]</a-tag>
+                </template>
+                <template slot="updatedAt" slot-scope="text, row">
+                    [[ formatTimestamp(row.updatedAt) ]]
+                </template>
+                <template slot="actions" slot-scope="text, row">
+                    <a-space>
+                        <a-button size="small" icon="edit" @click="showEditUser(row)">Edit</a-button>
+                        <a-popconfirm title="Delete this user?" @confirm="deleteManagedUser(row)">
+                            <a-button size="small" icon="delete" type="danger">Delete</a-button>
+                        </a-popconfirm>
+                    </a-space>
+                </template>
+            </a-table>
+        </a-list-item>
+    </a-collapse-panel>
+    <a-collapse-panel key="5" header="User action log">
+        <a-list-item>
+            <a-space direction="horizontal" :style="{ padding: '0 20px', marginBottom: '12px' }">
+                <a-button icon="reload" @click="loadAuditLogs">Refresh</a-button>
+            </a-space>
+        </a-list-item>
+        <a-list-item>
+            <a-table
+                size="small"
+                row-key="id"
+                :columns="auditLogColumns"
+                :data-source="auditLogs"
+                :pagination="{ pageSize: 10 }"
+                :scroll="{ x: 980 }"
+                :style="{ width: '100%' }">
+                <template slot="createdAt" slot-scope="text, row">
+                    [[ formatTimestamp(row.createdAt) ]]
                 </template>
             </a-table>
         </a-list-item>
@@ -81,5 +149,29 @@
         :style="{ marginBottom: '12px' }">
     </a-alert>
     <a-input-search :value="createdApiToken.token" readonly enter-button="Copy" @search="copyCreatedApiToken"></a-input-search>
+</a-modal>
+
+<a-modal
+    v-model="userForm.visible"
+    :title="userForm.mode === 'create' ? 'Create user' : 'Edit user'"
+    @ok="saveManagedUser">
+    <a-form layout="vertical">
+        <a-form-item label="Username">
+            <a-input v-model.trim="userForm.username" autocomplete="off"></a-input>
+        </a-form-item>
+        <a-form-item :label="userForm.mode === 'create' ? 'Password' : 'New password (optional)'">
+            <a-input-password v-model="userForm.password" autocomplete="new-password"></a-input-password>
+        </a-form-item>
+        <a-form-item label="Role">
+            <a-select v-model="userForm.role">
+                <a-select-option v-for="r in userRoleOptions" :key="r.value" :value="r.value">
+                    [[ r.label ]]
+                </a-select-option>
+            </a-select>
+        </a-form-item>
+        <a-form-item label="Enabled">
+            <a-switch v-model="userForm.enabled"></a-switch>
+        </a-form-item>
+    </a-form>
 </a-modal>
 {{end}}

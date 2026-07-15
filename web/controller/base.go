@@ -7,6 +7,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/web/locale"
+	"github.com/mhsanaei/3x-ui/v2/web/service"
 	"github.com/mhsanaei/3x-ui/v2/web/session"
 
 	"github.com/gin-gonic/gin"
@@ -17,16 +18,33 @@ type BaseController struct{}
 
 // checkLogin is a middleware that verifies user authentication and handles unauthorized access.
 func (a *BaseController) checkLogin(c *gin.Context) {
-	if !session.IsLogin(c) {
-		if isAjax(c) {
-			pureJsonMsg(c, http.StatusUnauthorized, false, I18nWeb(c, "pages.login.loginAgain"))
-		} else {
-			c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path"))
+	user := session.GetLoginUser(c)
+	if user != nil {
+		freshUser, err := (&service.UserService{}).GetById(user.Id)
+		if err == nil && freshUser.CanUsePanel() {
+			session.SetLoginUser(c, freshUser)
+			c.Set("audit_user", freshUser)
+			c.Next()
+			return
 		}
-		c.Abort()
-	} else {
-		c.Next()
+		session.ClearSession(c)
 	}
+	if isAjax(c) {
+		pureJsonMsg(c, http.StatusUnauthorized, false, I18nWeb(c, "pages.login.loginAgain"))
+	} else {
+		c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path"))
+	}
+	c.Abort()
+}
+
+func (a *BaseController) auditActions(c *gin.Context) {
+	switch c.Request.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		c.Next()
+		return
+	}
+	c.Next()
+	_ = (&service.AuditService{}).RecordRequest(c, "", "")
 }
 
 // I18nWeb retrieves an internationalized message for the web interface based on the current locale.
