@@ -307,10 +307,14 @@ func (a *InboundController) updateInboundClient(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientUpdateSuccess"), nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		if err := a.xrayService.RestartXray(true); err != nil {
+			a.xrayService.SetToNeedRestart()
+			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+			return
+		}
 	}
+	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientUpdateSuccess"), nil)
 }
 
 // resetClientTraffic resets the traffic counter for a specific client in an inbound.
