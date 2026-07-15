@@ -80,6 +80,71 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 	return result, result.Affected > 0, nil
 }
 
+func (s *ClientService) BulkSetSpeedLimits(upMbps int64, downMbps int64) (*BulkClientResult, bool, error) {
+	result := &BulkClientResult{Skipped: []string{}}
+	if upMbps < 0 {
+		upMbps = 0
+	}
+	if downMbps < 0 {
+		downMbps = 0
+	}
+
+	db := database.GetDB()
+	tx := db.Begin()
+
+	var records []model.ClientRecord
+	if err := tx.Model(model.ClientRecord{}).Find(&records).Error; err != nil {
+		tx.Rollback()
+		return result, false, err
+	}
+
+	nowMs := time.Now().Unix() * 1000
+	for i := range records {
+		records[i].SpeedLimitUpMbps = upMbps
+		records[i].SpeedLimitDownMbps = downMbps
+		records[i].UpdatedAt = nowMs
+		if err := tx.Save(&records[i]).Error; err != nil {
+			tx.Rollback()
+			return result, false, err
+		}
+		result.Affected++
+	}
+
+	var inbounds []model.Inbound
+	if err := tx.Find(&inbounds).Error; err != nil {
+		tx.Rollback()
+		return result, false, err
+	}
+
+	recordsByEmail := make(map[string]*model.ClientRecord, len(records))
+	for i := range records {
+		recordsByEmail[records[i].Email] = &records[i]
+	}
+	for i := range inbounds {
+		changed, err := patchClientSpeedLimitsInSettings(&inbounds[i], recordsByEmail)
+		if err != nil {
+			tx.Rollback()
+			return result, false, err
+		}
+		if !changed {
+			continue
+		}
+		if err := tx.Save(&inbounds[i]).Error; err != nil {
+			tx.Rollback()
+			return result, false, err
+		}
+		if err := syncInboundClientsFromSettings(tx, &inbounds[i]); err != nil {
+			tx.Rollback()
+			return result, false, err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return result, false, err
+	}
+	return result, result.Affected > 0, nil
+}
+
 func (s *ClientService) deleteClientEverywhere(inboundSvc *InboundService, email string, inboundIds []int, keepTraffic bool) (bool, error) {
 	db := database.GetDB()
 	tx := db.Begin()
@@ -230,6 +295,45 @@ func patchClientRecordInSettings(inbound *model.Inbound, record *model.ClientRec
 		}
 		row["totalGB"] = record.TotalGB
 		row["expiryTime"] = record.ExpiryTime
+		row["speedLimitUpMbps"] = record.SpeedLimitUpMbps
+		row["speedLimitDownMbps"] = record.SpeedLimitDownMbps
+		row["updated_at"] = record.UpdatedAt
+		changed = true
+	}
+	if !changed {
+		return false, nil
+	}
+	settings["clients"] = rawClients
+	b, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	inbound.Settings = string(b)
+	return true, nil
+}
+
+func patchClientSpeedLimitsInSettings(inbound *model.Inbound, recordsByEmail map[string]*model.ClientRecord) (bool, error) {
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		return false, err
+	}
+	rawClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, nil
+	}
+	changed := false
+	for _, raw := range rawClients {
+		row, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		rowEmail, _ := row["email"].(string)
+		record := recordsByEmail[rowEmail]
+		if record == nil {
+			continue
+		}
+		row["speedLimitUpMbps"] = record.SpeedLimitUpMbps
+		row["speedLimitDownMbps"] = record.SpeedLimitDownMbps
 		row["updated_at"] = record.UpdatedAt
 		changed = true
 	}

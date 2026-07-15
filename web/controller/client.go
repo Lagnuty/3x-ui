@@ -31,6 +31,7 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	g.POST("/bulkAttach", a.bulkAttach)
 	g.POST("/bulkDetach", a.bulkDetach)
 	g.POST("/bulkAdjust", a.bulkAdjust)
+	g.POST("/bulkSpeedLimit", a.bulkSpeedLimit)
 	g.POST("/bulkDel", a.bulkDelete)
 	g.POST("/bulkResetTraffic", a.bulkResetTraffic)
 	g.POST("/resetTraffic/:email", a.resetTrafficByEmail)
@@ -82,6 +83,11 @@ type bulkAdjustRequest struct {
 	AddBytes int64    `json:"addBytes"`
 }
 
+type bulkSpeedLimitRequest struct {
+	SpeedLimitUpMbps   int64 `json:"speedLimitUpMbps"`
+	SpeedLimitDownMbps int64 `json:"speedLimitDownMbps"`
+}
+
 type bulkDeleteRequest struct {
 	Emails      []string `json:"emails"`
 	KeepTraffic bool     `json:"keepTraffic"`
@@ -122,6 +128,23 @@ func (a *ClientController) bulkAdjust(c *gin.Context) {
 	result, needRestart, err := a.clientService.BulkAdjust(&a.inboundService, req.Emails, req.AddDays, req.AddBytes)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
+	}
+	jsonObj(c, result, err)
+}
+
+func (a *ClientController) bulkSpeedLimit(c *gin.Context) {
+	var req bulkSpeedLimitRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	result, needRestart, err := a.clientService.BulkSetSpeedLimits(req.SpeedLimitUpMbps, req.SpeedLimitDownMbps)
+	if err == nil && needRestart {
+		if restartErr := a.xrayService.RestartXray(true); restartErr != nil {
+			a.xrayService.SetToNeedRestart()
+			jsonObj(c, result, restartErr)
+			return
+		}
 	}
 	jsonObj(c, result, err)
 }

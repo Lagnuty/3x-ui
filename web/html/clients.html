@@ -23,6 +23,31 @@
                   </a-popconfirm>
                 </a-space>
               </template>
+              <a-row :gutter="[8, 8]" type="flex" align="middle" style="margin-bottom: 12px;">
+                <a-col>
+                  <a-space :direction="isMobile ? 'vertical' : 'horizontal'" :style="{ width: isMobile ? '100%' : 'auto' }">
+                    <span>Speed limit for all clients</span>
+                    <a-input-number
+                      v-model="bulkSpeedLimit.up"
+                      :min="0"
+                      :step="1"
+                      placeholder="Up Mbps"
+                      :style="{ width: isMobile ? '100%' : '130px' }">
+                    </a-input-number>
+                    <a-input-number
+                      v-model="bulkSpeedLimit.down"
+                      :min="0"
+                      :step="1"
+                      placeholder="Down Mbps"
+                      :style="{ width: isMobile ? '100%' : '130px' }">
+                    </a-input-number>
+                    <a-popconfirm title="Apply this speed limit to all clients?" @confirm="bulkSetSpeedLimit">
+                      <a-button icon="thunderbolt" type="primary">Apply to all</a-button>
+                    </a-popconfirm>
+                    <span :style="{ color: 'var(--ant-secondary-color)' }">0 = unlimited</span>
+                  </a-space>
+                </a-col>
+              </a-row>
               <a-table
                 size="small"
                 row-key="email"
@@ -45,6 +70,9 @@
                 <template slot="traffic" slot-scope="text, row">
                   <span>Up [[ sizeFormat(row.traffic && row.traffic.up) ]] / Down [[ sizeFormat(row.traffic && row.traffic.down) ]]</span>
                   <div :style="{ color: 'var(--ant-secondary-color)' }">[[ sizeFormat(trafficUsed(row)) ]] / [[ limitText(row) ]]</div>
+                </template>
+                <template slot="speedLimit" slot-scope="text, row">
+                  <span>Up [[ row.speedLimitUpMbps || 0 ]] / Down [[ row.speedLimitDownMbps || 0 ]] Mbps</span>
                 </template>
                 <template slot="expiry" slot-scope="text, row">
                   [[ expiryText(row.expiryTime) ]]
@@ -151,12 +179,17 @@
           addDays: 0,
           addGB: 0,
         },
+        bulkSpeedLimit: {
+          up: 0,
+          down: 0,
+        },
         columns: [
           { title: 'Email', dataIndex: 'email', key: 'email', width: 220 },
           { title: 'Status', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 110 },
           { title: 'Group', key: 'group', scopedSlots: { customRender: 'group' }, width: 140 },
           { title: 'Inbounds', key: 'inbounds', scopedSlots: { customRender: 'inbounds' }, width: 180 },
           { title: 'Traffic', key: 'traffic', scopedSlots: { customRender: 'traffic' }, width: 260 },
+          { title: 'Speed limit', key: 'speedLimit', scopedSlots: { customRender: 'speedLimit' }, width: 180 },
           { title: 'Expiry', key: 'expiry', scopedSlots: { customRender: 'expiry' }, width: 180 },
           { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 320 },
         ],
@@ -308,6 +341,18 @@
           await this.loadClients();
         } else {
           this.$message.error(res.data.msg || 'Bulk adjust failed');
+        }
+      },
+      async bulkSetSpeedLimit() {
+        const res = await axios.post('panel/api/clients/bulkSpeedLimit', {
+          speedLimitUpMbps: this.bulkSpeedLimit.up || 0,
+          speedLimitDownMbps: this.bulkSpeedLimit.down || 0,
+        });
+        if (res.data && res.data.success) {
+          this.$message.success(`Updated ${res.data.obj.affected || 0} client(s)`);
+          await this.loadClients();
+        } else {
+          this.$message.error(res.data.msg || 'Speed limit update failed');
         }
       },
       async bulkResetTraffic() {
