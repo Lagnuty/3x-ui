@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
 	"github.com/mhsanaei/3x-ui/v2/xray"
@@ -158,7 +159,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 					}
 				}
 				for key := range c {
-					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" {
+					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" && key != "auth" {
 						delete(c, key)
 					}
 					if c["flow"] == "xtls-rprx-vision-udp443" {
@@ -175,6 +176,10 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			}
 
 			inbound.Settings = string(modifiedSettings)
+		}
+
+		if inbound.Protocol == model.Hysteria {
+			s.syncHysteriaRuntimeAuth(inbound, clients)
 		}
 
 		if len(inbound.StreamSettings) > 0 {
@@ -206,6 +211,61 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
 	return xrayConfig, nil
+}
+
+func (s *XrayService) syncHysteriaRuntimeAuth(inbound *model.Inbound, clients []any) {
+	if len(clients) == 0 {
+		return
+	}
+
+	auth := ""
+	for _, client := range clients {
+		c, ok := client.(map[string]any)
+		if !ok {
+			continue
+		}
+		if enable, ok := c["enable"].(bool); ok && !enable {
+			continue
+		}
+		if value, ok := c["auth"].(string); ok && strings.TrimSpace(value) != "" {
+			auth = strings.TrimSpace(value)
+			break
+		}
+	}
+	if auth == "" {
+		return
+	}
+
+	stream := map[string]any{}
+	if strings.TrimSpace(inbound.StreamSettings) != "" {
+		if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err != nil {
+			logger.Warningf("Unable to parse Hysteria stream settings for inbound %d: %v", inbound.Id, err)
+			return
+		}
+	}
+	if stream == nil {
+		stream = map[string]any{}
+	}
+	stream["network"] = "hysteria"
+	stream["security"] = "tls"
+
+	hysteriaSettings, ok := stream["hysteriaSettings"].(map[string]any)
+	if !ok {
+		hysteriaSettings = map[string]any{}
+		stream["hysteriaSettings"] = hysteriaSettings
+	}
+	hysteriaSettings["version"] = 2
+	hysteriaSettings["auth"] = auth
+	if _, ok := hysteriaSettings["udpIdleTimeout"]; !ok {
+		hysteriaSettings["udpIdleTimeout"] = 60
+	}
+
+	raw, err := json.MarshalIndent(stream, "", "  ")
+	if err != nil {
+		logger.Warningf("Unable to marshal Hysteria stream settings for inbound %d: %v", inbound.Id, err)
+		return
+	}
+	inbound.StreamSettings = string(raw)
 }
 
 func (s *XrayService) mergeOutboundSubscriptions(xrayConfig *xray.Config) error {

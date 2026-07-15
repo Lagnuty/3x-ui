@@ -1023,6 +1023,10 @@ func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraff
 	if err != nil {
 		return err, false
 	}
+	err = s.addHysteriaFallbackClientTraffic(tx, inboundTraffics, clientTraffics)
+	if err != nil {
+		return err, false
+	}
 
 	needRestart0, count, err := s.autoRenewClients(tx)
 	if err != nil {
@@ -1068,6 +1072,109 @@ func (s *InboundService) addInboundTraffic(tx *gorm.DB, traffics []*xray.Traffic
 		}
 	}
 	return nil
+}
+
+func (s *InboundService) addHysteriaFallbackClientTraffic(tx *gorm.DB, inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) error {
+	if len(inboundTraffics) == 0 {
+		return nil
+	}
+
+	reportedClients := make(map[string]struct{}, len(clientTraffics))
+	for _, traffic := range clientTraffics {
+		if traffic.Email != "" {
+			reportedClients[traffic.Email] = struct{}{}
+		}
+	}
+
+	var inbounds []*model.Inbound
+	err := tx.Model(model.Inbound{}).Where("protocol = ? AND enable = ?", model.Hysteria, true).Find(&inbounds).Error
+	if err != nil {
+		return err
+	}
+	if len(inbounds) == 0 {
+		return nil
+	}
+
+	byTag := make(map[string]*model.Inbound, len(inbounds))
+	for _, inbound := range inbounds {
+		byTag[inbound.Tag] = inbound
+	}
+
+	onlineClients := map[string]struct{}{}
+	if p != nil {
+		for _, email := range p.GetOnlineClients() {
+			onlineClients[email] = struct{}{}
+		}
+	}
+
+	now := time.Now().UnixMilli()
+	changedOnline := false
+	for _, traffic := range inboundTraffics {
+		if traffic == nil || !traffic.IsInbound || traffic.Up+traffic.Down == 0 {
+			continue
+		}
+		inbound := byTag[traffic.Tag]
+		if inbound == nil {
+			continue
+		}
+
+		client, ok, err := s.primaryHysteriaClient(inbound)
+		if err != nil || !ok {
+			return err
+		}
+		if _, exists := reportedClients[client.Email]; exists {
+			continue
+		}
+
+		var count int64
+		if err := tx.Model(xray.ClientTraffic{}).Where("email = ?", client.Email).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			if err := s.AddClientStat(tx, inbound.Id, &client); err != nil {
+				return err
+			}
+		}
+
+		err = tx.Model(xray.ClientTraffic{}).Where("email = ?", client.Email).Updates(map[string]any{
+			"up":          gorm.Expr("up + ?", traffic.Up),
+			"down":        gorm.Expr("down + ?", traffic.Down),
+			"all_time":    gorm.Expr("COALESCE(all_time, 0) + ?", traffic.Up+traffic.Down),
+			"last_online": now,
+		}).Error
+		if err != nil {
+			return err
+		}
+		onlineClients[client.Email] = struct{}{}
+		changedOnline = true
+	}
+
+	if changedOnline && p != nil {
+		emails := make([]string, 0, len(onlineClients))
+		for email := range onlineClients {
+			emails = append(emails, email)
+		}
+		p.SetOnlineClients(emails)
+	}
+	return nil
+}
+
+func (s *InboundService) primaryHysteriaClient(inbound *model.Inbound) (model.Client, bool, error) {
+	clients, err := s.GetClients(inbound)
+	if err != nil {
+		return model.Client{}, false, err
+	}
+	for _, client := range clients {
+		if client.Enable && client.Email != "" {
+			return client, true, nil
+		}
+	}
+	for _, client := range clients {
+		if client.Email != "" {
+			return client, true, nil
+		}
+	}
+	return model.Client{}, false, nil
 }
 
 func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTraffic) (err error) {
