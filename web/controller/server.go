@@ -33,6 +33,7 @@ type ServerController struct {
 func NewServerController(g *gin.RouterGroup) *ServerController {
 	a := &ServerController{}
 	a.initRouter(g)
+	a.refreshStatus()
 	a.startTask()
 	return a
 }

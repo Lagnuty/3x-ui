@@ -66,22 +66,35 @@ type Status struct {
 		Current uint64 `json:"current"`
 		Total   uint64 `json:"total"`
 	} `json:"disk"`
+	DiskIO struct {
+		Read  uint64 `json:"read"`
+		Write uint64 `json:"write"`
+	} `json:"diskIO"`
+	DiskTraffic struct {
+		Read  uint64 `json:"read"`
+		Write uint64 `json:"write"`
+	} `json:"diskTraffic"`
 	Xray struct {
 		State    ProcessState `json:"state"`
 		ErrorMsg string       `json:"errorMsg"`
 		Version  string       `json:"version"`
 	} `json:"xray"`
-	Uptime   uint64    `json:"uptime"`
-	Loads    []float64 `json:"loads"`
-	TcpCount int       `json:"tcpCount"`
-	UdpCount int       `json:"udpCount"`
-	NetIO    struct {
-		Up   uint64 `json:"up"`
-		Down uint64 `json:"down"`
+	PanelVersion string    `json:"panelVersion"`
+	Uptime       uint64    `json:"uptime"`
+	Loads        []float64 `json:"loads"`
+	TcpCount     int       `json:"tcpCount"`
+	UdpCount     int       `json:"udpCount"`
+	NetIO        struct {
+		Up      uint64 `json:"up"`
+		Down    uint64 `json:"down"`
+		PktUp   uint64 `json:"pktUp"`
+		PktDown uint64 `json:"pktDown"`
 	} `json:"netIO"`
 	NetTraffic struct {
-		Sent uint64 `json:"sent"`
-		Recv uint64 `json:"recv"`
+		Sent    uint64 `json:"sent"`
+		Recv    uint64 `json:"recv"`
+		PktSent uint64 `json:"pktSent"`
+		PktRecv uint64 `json:"pktRecv"`
 	} `json:"netTraffic"`
 	PublicIP struct {
 		IPv4 string `json:"ipv4"`
@@ -225,6 +238,21 @@ func getPublicIP(url string) string {
 	return ipString
 }
 
+func isVirtualInterface(name string) bool {
+	if name == "" {
+		return true
+	}
+	virtualPrefixes := []string{
+		"lo", "docker", "br-", "veth", "virbr", "vmnet", "tun", "tap", "wg", "zt", "tailscale",
+	}
+	for _, prefix := range virtualPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	now := time.Now()
 	status := &Status{
@@ -306,6 +334,29 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Disk.Total = diskInfo.Total
 	}
 
+	diskIOStats, err := disk.IOCounters()
+	if err != nil {
+		logger.Warning("get disk io counters failed:", err)
+	} else {
+		var totalRead, totalWrite uint64
+		for _, counter := range diskIOStats {
+			totalRead += counter.ReadBytes
+			totalWrite += counter.WriteBytes
+		}
+		status.DiskTraffic.Read = totalRead
+		status.DiskTraffic.Write = totalWrite
+		if lastStatus != nil {
+			duration := now.Sub(lastStatus.T)
+			seconds := float64(duration) / float64(time.Second)
+			if seconds > 0 && status.DiskTraffic.Read >= lastStatus.DiskTraffic.Read {
+				status.DiskIO.Read = uint64(float64(status.DiskTraffic.Read-lastStatus.DiskTraffic.Read) / seconds)
+			}
+			if seconds > 0 && status.DiskTraffic.Write >= lastStatus.DiskTraffic.Write {
+				status.DiskIO.Write = uint64(float64(status.DiskTraffic.Write-lastStatus.DiskTraffic.Write) / seconds)
+			}
+		}
+	}
+
 	// Load averages
 	avgState, err := load.Avg()
 	if err != nil {
@@ -315,21 +366,41 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	}
 
 	// Network stats
-	ioStats, err := net.IOCounters(false)
+	ioStats, err := net.IOCounters(true)
 	if err != nil {
 		logger.Warning("get io counters failed:", err)
 	} else if len(ioStats) > 0 {
-		ioStat := ioStats[0]
-		status.NetTraffic.Sent = ioStat.BytesSent
-		status.NetTraffic.Recv = ioStat.BytesRecv
+		var totalSent, totalRecv, totalPktSent, totalPktRecv uint64
+		for _, iface := range ioStats {
+			name := strings.ToLower(iface.Name)
+			if isVirtualInterface(name) {
+				continue
+			}
+			totalSent += iface.BytesSent
+			totalRecv += iface.BytesRecv
+			totalPktSent += iface.PacketsSent
+			totalPktRecv += iface.PacketsRecv
+		}
+		status.NetTraffic.Sent = totalSent
+		status.NetTraffic.Recv = totalRecv
+		status.NetTraffic.PktSent = totalPktSent
+		status.NetTraffic.PktRecv = totalPktRecv
 
 		if lastStatus != nil {
 			duration := now.Sub(lastStatus.T)
 			seconds := float64(duration) / float64(time.Second)
-			up := uint64(float64(status.NetTraffic.Sent-lastStatus.NetTraffic.Sent) / seconds)
-			down := uint64(float64(status.NetTraffic.Recv-lastStatus.NetTraffic.Recv) / seconds)
-			status.NetIO.Up = up
-			status.NetIO.Down = down
+			if seconds > 0 && status.NetTraffic.Sent >= lastStatus.NetTraffic.Sent {
+				status.NetIO.Up = uint64(float64(status.NetTraffic.Sent-lastStatus.NetTraffic.Sent) / seconds)
+			}
+			if seconds > 0 && status.NetTraffic.Recv >= lastStatus.NetTraffic.Recv {
+				status.NetIO.Down = uint64(float64(status.NetTraffic.Recv-lastStatus.NetTraffic.Recv) / seconds)
+			}
+			if seconds > 0 && status.NetTraffic.PktSent >= lastStatus.NetTraffic.PktSent {
+				status.NetIO.PktUp = uint64(float64(status.NetTraffic.PktSent-lastStatus.NetTraffic.PktSent) / seconds)
+			}
+			if seconds > 0 && status.NetTraffic.PktRecv >= lastStatus.NetTraffic.PktRecv {
+				status.NetIO.PktDown = uint64(float64(status.NetTraffic.PktRecv-lastStatus.NetTraffic.PktRecv) / seconds)
+			}
 		}
 	} else {
 		logger.Warning("can not find io counters")
@@ -402,6 +473,7 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Xray.ErrorMsg = s.xrayService.GetXrayResult()
 	}
 	status.Xray.Version = s.xrayService.GetXrayVersion()
+	status.PanelVersion = config.GetVersion()
 
 	// Application stats
 	var rtm runtime.MemStats
