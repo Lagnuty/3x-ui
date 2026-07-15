@@ -92,6 +92,7 @@
 "ultraDark" = "Очень темная"
 "dashboard" = "Дашборд"
 "inbounds" = "Подключения"
+"proxies" = "Прокси"
 "clients" = "Клиенты"
 "groups" = "Группы"
 "nodes" = "Узлы"

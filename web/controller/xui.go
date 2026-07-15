@@ -27,6 +27,7 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 
 	g.GET("/", a.index)
 	g.GET("/inbounds", a.inbounds)
+	g.GET("/proxies", a.proxies)
 	g.GET("/clients", a.clients)
 	g.GET("/groups", a.groups)
 	g.GET("/nodes", a.nodes)
@@ -45,6 +46,11 @@ func (a *XUIController) index(c *gin.Context) {
 // inbounds renders the inbounds management page.
 func (a *XUIController) inbounds(c *gin.Context) {
 	html(c, "inbounds.html", "pages.inbounds.title", nil)
+}
+
+// proxies renders the proxy link builder page.
+func (a *XUIController) proxies(c *gin.Context) {
+	html(c, "proxies.html", "menu.proxies", nil)
 }
 
 // clients renders the global clients management page.

@@ -107,6 +107,12 @@ The current branch version is stored in `config/version`.
 
 ## Subscriptions and outbounds
 
+- Added a new **Proxies** panel tab for local proxy URI generation.
+- The Proxies tab can build share links, subscription text, QR codes, and Xray
+  outbound JSON for VLESS, VMess, Trojan, Shadowsocks, Hysteria2, WireGuard,
+  SOCKS, and HTTP.
+- Proxy builder data is generated in the browser and is not stored in the panel
+  database.
 - Added outbound subscription model.
 - Added subscription merge metadata.
 - Added subscription JSON options, direct rules, fragments, noises, mux and

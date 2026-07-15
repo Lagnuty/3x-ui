@@ -1,0 +1,619 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' proxies-page'">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :lg="14">
+          <a-card hoverable title="Прокси">
+            <template #extra>
+              <a-space>
+                <a-button icon="reload" @click="resetForm">Сбросить</a-button>
+                <a-button type="primary" icon="copy" @click="copy(generatedLink)">Копировать ссылку</a-button>
+              </a-space>
+            </template>
+
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Тип прокси">
+                    <a-select v-model="form.protocol">
+                      <a-select-option v-for="protocol in protocols" :key="protocol" :value="protocol">
+                        [[ protocol ]]
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Адрес / домен">
+                    <a-input v-model.trim="form.address" placeholder="ee.l-vpn.net.ru или 1.2.3.4"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Порт">
+                    <a-input-number v-model="form.port" :min="1" :max="65535" :style="{ width: '100%' }"></a-input-number>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12">
+                <a-col :xs="24" :sm="8">
+                  <a-form-item :label="credentialLabel">
+                    <a-input-password v-model="form.credential" :placeholder="credentialPlaceholder"></a-input-password>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Название">
+                    <a-input v-model.trim="form.remark" placeholder="client-1"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8" v-if="usesStream">
+                  <a-form-item label="Transport">
+                    <a-select v-model="form.network">
+                      <a-select-option value="tcp">tcp</a-select-option>
+                      <a-select-option value="ws">ws</a-select-option>
+                      <a-select-option value="grpc">grpc</a-select-option>
+                      <a-select-option value="httpupgrade">httpupgrade</a-select-option>
+                      <a-select-option value="splithttp">splithttp</a-select-option>
+                      <a-select-option value="kcp">kcp</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="usesStream">
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Security">
+                    <a-select v-model="form.security">
+                      <a-select-option value="none">none</a-select-option>
+                      <a-select-option value="tls">tls</a-select-option>
+                      <a-select-option value="reality">reality</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="SNI / Server name">
+                    <a-input v-model.trim="form.sni" placeholder="server.name"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8" v-if="form.protocol === 'vless'">
+                  <a-form-item label="Flow">
+                    <a-input v-model.trim="form.flow" placeholder="xtls-rprx-vision"></a-input>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="usesStream">
+                <a-col :xs="24" :sm="8" v-if="form.network === 'ws' || form.network === 'httpupgrade' || form.network === 'splithttp'">
+                  <a-form-item label="Host">
+                    <a-input v-model.trim="form.host" placeholder="host header"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8" v-if="form.network === 'ws' || form.network === 'httpupgrade' || form.network === 'splithttp'">
+                  <a-form-item label="Path">
+                    <a-input v-model.trim="form.path" placeholder="/path"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8" v-if="form.network === 'grpc'">
+                  <a-form-item label="gRPC serviceName">
+                    <a-input v-model.trim="form.serviceName" placeholder="service"></a-input>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="form.security === 'reality' && usesStream">
+                <a-col :xs="24" :sm="6">
+                  <a-form-item label="Fingerprint">
+                    <a-input v-model.trim="form.fp" placeholder="chrome"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Public key">
+                    <a-input v-model.trim="form.pbk"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="5">
+                  <a-form-item label="Short ID">
+                    <a-input v-model.trim="form.sid"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="5">
+                  <a-form-item label="SpiderX">
+                    <a-input v-model.trim="form.spx" placeholder="/"></a-input>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="form.protocol === 'shadowsocks'">
+                <a-col :xs="24" :sm="12">
+                  <a-form-item label="Method">
+                    <a-select v-model="form.method">
+                      <a-select-option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</a-select-option>
+                      <a-select-option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</a-select-option>
+                      <a-select-option value="aes-256-gcm">aes-256-gcm</a-select-option>
+                      <a-select-option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="form.protocol === 'hysteria2'">
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Obfs">
+                    <a-input v-model.trim="form.obfs" placeholder="salamander"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Obfs password">
+                    <a-input-password v-model="form.obfsPassword"></a-input-password>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="TLS">
+                    <a-checkbox v-model="form.insecure">allowInsecure</a-checkbox>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="form.protocol === 'wireguard'">
+                <a-col :xs="24" :sm="12">
+                  <a-form-item label="Local private key">
+                    <a-input-password v-model="form.privateKey"></a-input-password>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="12">
+                  <a-form-item label="Peer public key">
+                    <a-input v-model.trim="form.publicKey"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Address">
+                    <a-input v-model.trim="form.wgAddress" placeholder="10.0.0.2/32"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="MTU">
+                    <a-input-number v-model="form.mtu" :min="0" :style="{ width: '100%' }"></a-input-number>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="8">
+                  <a-form-item label="Reserved">
+                    <a-input v-model.trim="form.reserved" placeholder="1,2,3"></a-input>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12" v-if="form.protocol === 'socks' || form.protocol === 'http'">
+                <a-col :xs="24" :sm="12">
+                  <a-form-item label="Username">
+                    <a-input v-model.trim="form.username"></a-input>
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :sm="12">
+                  <a-form-item label="Password">
+                    <a-input-password v-model="form.password"></a-input-password>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </a-card>
+        </a-col>
+
+        <a-col :xs="24" :lg="10">
+          <a-card hoverable title="Готовая ссылка">
+            <a-alert v-if="!isValid" type="warning" show-icon message="Заполни адрес, порт и ключевые поля протокола." :style="{ marginBottom: '12px' }"></a-alert>
+            <a-textarea :value="generatedLink" :auto-size="{ minRows: 4, maxRows: 8 }" readonly></a-textarea>
+            <a-space :style="{ marginTop: '10px', flexWrap: 'wrap' }">
+              <a-button icon="copy" @click="copy(generatedLink)" :disabled="!generatedLink">URI</a-button>
+              <a-button icon="copy" @click="copy(subscriptionText)" :disabled="!generatedLink">Subscription</a-button>
+              <a-button icon="copy" @click="copy(outboundJson)" :disabled="!outboundJson">Outbound JSON</a-button>
+            </a-space>
+            <div class="proxy-qr">
+              <canvas id="proxy-qrcode" title="Copy" @click="copy(generatedLink)"></canvas>
+            </div>
+          </a-card>
+
+          <a-card hoverable title="Xray outbound JSON" :style="{ marginTop: '16px' }">
+            <a-textarea :value="outboundJson" :auto-size="{ minRows: 12, maxRows: 22 }" readonly></a-textarea>
+          </a-card>
+        </a-col>
+      </a-row>
+    </a-layout-content>
+  </a-layout>
+</a-layout>
+
+{{ template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+<script src="{{ .base_path }}assets/qrcode/qrious2.min.js?{{ .cur_ver }}"></script>
+<style>
+  .proxies-page .ant-card {
+    border-radius: 8px;
+  }
+
+  .proxy-qr {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+  }
+
+  #proxy-qrcode {
+    width: 220px;
+    height: 220px;
+    max-width: 100%;
+    background: #fff;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+</style>
+<script>
+  const defaultProxyForm = () => ({
+    protocol: 'vless',
+    address: '',
+    port: 443,
+    credential: '',
+    remark: '',
+    network: 'tcp',
+    security: 'tls',
+    sni: '',
+    flow: '',
+    host: '',
+    path: '',
+    serviceName: '',
+    fp: 'chrome',
+    pbk: '',
+    sid: '',
+    spx: '/',
+    method: '2022-blake3-aes-256-gcm',
+    obfs: '',
+    obfsPassword: '',
+    insecure: false,
+    privateKey: '',
+    publicKey: '',
+    wgAddress: '',
+    mtu: 1420,
+    reserved: '',
+    username: '',
+    password: '',
+  });
+
+  const app = new Vue({
+    delimiters: ['[[', ']]'],
+    el: '#app',
+    data() {
+      return {
+        protocols: ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria2', 'wireguard', 'socks', 'http'],
+        form: defaultProxyForm(),
+        qr: null,
+      }
+    },
+    computed: {
+      usesStream() {
+        return ['vless', 'vmess', 'trojan'].includes(this.form.protocol);
+      },
+      credentialLabel() {
+        if (this.form.protocol === 'vless' || this.form.protocol === 'vmess') return 'UUID';
+        if (this.form.protocol === 'trojan') return 'Password';
+        if (this.form.protocol === 'shadowsocks') return 'Password';
+        if (this.form.protocol === 'hysteria2') return 'Auth password';
+        if (this.form.protocol === 'wireguard') return 'Peer public key';
+        return 'Auth';
+      },
+      credentialPlaceholder() {
+        if (this.form.protocol === 'wireguard') return 'Можно заполнить ниже в Peer public key';
+        if (this.form.protocol === 'socks' || this.form.protocol === 'http') return 'Можно оставить пустым';
+        return '';
+      },
+      isValid() {
+        if (!this.form.address || !this.form.port) return false;
+        if (this.form.protocol === 'wireguard') return !!(this.form.privateKey && this.form.publicKey);
+        if (this.form.protocol === 'socks' || this.form.protocol === 'http') return true;
+        return !!this.form.credential;
+      },
+      generatedLink() {
+        if (!this.isValid) return '';
+        const protocol = this.form.protocol;
+        if (protocol === 'vless') return this.buildVless();
+        if (protocol === 'vmess') return this.buildVmess();
+        if (protocol === 'trojan') return this.buildTrojan();
+        if (protocol === 'shadowsocks') return this.buildShadowsocks();
+        if (protocol === 'hysteria2') return this.buildHysteria2();
+        if (protocol === 'wireguard') return this.buildWireguard();
+        if (protocol === 'socks') return this.buildSimpleProxy('socks');
+        if (protocol === 'http') return this.buildSimpleProxy('http');
+        return '';
+      },
+      subscriptionText() {
+        return this.generatedLink ? this.generatedLink + '\n' : '';
+      },
+      outboundJson() {
+        if (!this.isValid) return '';
+        return JSON.stringify(this.buildOutbound(), null, 2);
+      },
+    },
+    watch: {
+      form: {
+        deep: true,
+        handler() {
+          this.$nextTick(this.refreshQr);
+        },
+      },
+      'form.protocol'(protocol) {
+        if (protocol === 'hysteria2') {
+          this.form.port = 443;
+          this.form.security = 'tls';
+        }
+        if (protocol === 'shadowsocks') {
+          this.form.port = 8388;
+        }
+        if (protocol === 'socks') {
+          this.form.port = 1080;
+        }
+        if (protocol === 'http') {
+          this.form.port = 8080;
+        }
+      },
+    },
+    mounted() {
+      this.refreshQr();
+    },
+    methods: {
+      resetForm() {
+        this.form = defaultProxyForm();
+      },
+      encode(value) {
+        return encodeURIComponent(value || '');
+      },
+      base64(value) {
+        return btoa(unescape(encodeURIComponent(value || '')));
+      },
+      base64Url(value) {
+        return this.base64(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      },
+      params(values) {
+        const query = [];
+        Object.keys(values).forEach((key) => {
+          const value = values[key];
+          if (value === undefined || value === null || value === '' || value === false) return;
+          query.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        });
+        return query.join('&');
+      },
+      tag() {
+        return this.form.remark ? '#' + this.encode(this.form.remark) : '';
+      },
+      streamParams(extra) {
+        const params = {
+          type: this.form.network,
+          security: this.form.security === 'none' ? undefined : this.form.security,
+          sni: this.form.sni,
+          host: this.form.host,
+          path: this.form.path,
+          serviceName: this.form.serviceName,
+          fp: this.form.security === 'reality' ? this.form.fp : '',
+          pbk: this.form.security === 'reality' ? this.form.pbk : '',
+          sid: this.form.security === 'reality' ? this.form.sid : '',
+          spx: this.form.security === 'reality' ? this.form.spx : '',
+        };
+        return this.params(Object.assign(params, extra || {}));
+      },
+      buildVless() {
+        const query = this.streamParams({
+          encryption: 'none',
+          flow: this.form.flow,
+        });
+        return `vless://${this.encode(this.form.credential)}@${this.form.address}:${this.form.port}?${query}${this.tag()}`;
+      },
+      buildVmess() {
+        const payload = {
+          v: '2',
+          ps: this.form.remark,
+          add: this.form.address,
+          port: String(this.form.port),
+          id: this.form.credential,
+          aid: '0',
+          scy: 'auto',
+          net: this.form.network,
+          type: 'none',
+          host: this.form.host,
+          path: this.form.path,
+          tls: this.form.security === 'none' ? '' : this.form.security,
+          sni: this.form.sni,
+          fp: this.form.fp,
+        };
+        return 'vmess://' + this.base64(JSON.stringify(payload));
+      },
+      buildTrojan() {
+        const query = this.streamParams();
+        return `trojan://${this.encode(this.form.credential)}@${this.form.address}:${this.form.port}?${query}${this.tag()}`;
+      },
+      buildShadowsocks() {
+        const userInfo = this.base64Url(`${this.form.method}:${this.form.credential}`);
+        return `ss://${userInfo}@${this.form.address}:${this.form.port}${this.tag()}`;
+      },
+      buildHysteria2() {
+        const query = this.params({
+          security: 'tls',
+          sni: this.form.sni,
+          insecure: this.form.insecure ? '1' : '',
+          obfs: this.form.obfs,
+          'obfs-password': this.form.obfsPassword,
+        });
+        return `hysteria2://${this.encode(this.form.credential)}@${this.form.address}:${this.form.port}${query ? '?' + query : ''}${this.tag()}`;
+      },
+      buildWireguard() {
+        const query = this.params({
+          publickey: this.form.publicKey,
+          address: this.form.wgAddress,
+          mtu: this.form.mtu,
+          reserved: this.form.reserved,
+        });
+        return `wireguard://${this.encode(this.form.privateKey)}@${this.form.address}:${this.form.port}?${query}${this.tag()}`;
+      },
+      buildSimpleProxy(protocol) {
+        let auth = '';
+        if (this.form.username || this.form.password) {
+          auth = `${this.encode(this.form.username)}:${this.encode(this.form.password)}@`;
+        }
+        return `${protocol}://${auth}${this.form.address}:${this.form.port}${this.tag()}`;
+      },
+      buildStreamSettings() {
+        const stream = {
+          network: this.form.network,
+          security: this.form.security === 'none' ? undefined : this.form.security,
+        };
+        if (this.form.security === 'tls') {
+          stream.tlsSettings = { serverName: this.form.sni };
+        }
+        if (this.form.security === 'reality') {
+          stream.realitySettings = {
+            serverName: this.form.sni,
+            fingerprint: this.form.fp,
+            publicKey: this.form.pbk,
+            shortId: this.form.sid,
+            spiderX: this.form.spx,
+          };
+        }
+        if (this.form.network === 'ws') {
+          stream.wsSettings = { path: this.form.path, headers: { Host: this.form.host } };
+        }
+        if (this.form.network === 'grpc') {
+          stream.grpcSettings = { serviceName: this.form.serviceName };
+        }
+        return this.cleanObject(stream);
+      },
+      buildOutbound() {
+        const protocol = this.form.protocol;
+        if (protocol === 'vless' || protocol === 'vmess') {
+          return {
+            protocol,
+            settings: {
+              vnext: [{
+                address: this.form.address,
+                port: Number(this.form.port),
+                users: [this.cleanObject({
+                  id: this.form.credential,
+                  encryption: protocol === 'vless' ? 'none' : undefined,
+                  security: protocol === 'vmess' ? 'auto' : undefined,
+                  flow: this.form.flow,
+                })],
+              }],
+            },
+            streamSettings: this.buildStreamSettings(),
+            tag: this.form.remark || `${protocol}-out`,
+          };
+        }
+        if (protocol === 'trojan') {
+          return {
+            protocol: 'trojan',
+            settings: {
+              servers: [{ address: this.form.address, port: Number(this.form.port), password: this.form.credential }],
+            },
+            streamSettings: this.buildStreamSettings(),
+            tag: this.form.remark || 'trojan-out',
+          };
+        }
+        if (protocol === 'shadowsocks') {
+          return {
+            protocol: 'shadowsocks',
+            settings: {
+              servers: [{ address: this.form.address, port: Number(this.form.port), method: this.form.method, password: this.form.credential }],
+            },
+            tag: this.form.remark || 'shadowsocks-out',
+          };
+        }
+        if (protocol === 'hysteria2') {
+          return {
+            protocol: 'hysteria2',
+            settings: this.cleanObject({
+              server: `${this.form.address}:${this.form.port}`,
+              password: this.form.credential,
+              obfs: this.form.obfs,
+              obfsPassword: this.form.obfsPassword,
+            }),
+            streamSettings: { security: 'tls', tlsSettings: this.cleanObject({ serverName: this.form.sni, allowInsecure: this.form.insecure }) },
+            tag: this.form.remark || 'hysteria2-out',
+          };
+        }
+        if (protocol === 'wireguard') {
+          return {
+            protocol: 'wireguard',
+            settings: this.cleanObject({
+              secretKey: this.form.privateKey,
+              address: this.form.wgAddress ? [this.form.wgAddress] : undefined,
+              peers: [{ publicKey: this.form.publicKey, endpoint: `${this.form.address}:${this.form.port}` }],
+              mtu: Number(this.form.mtu),
+              reserved: this.form.reserved,
+            }),
+            tag: this.form.remark || 'wireguard-out',
+          };
+        }
+        return {
+          protocol,
+          settings: {
+            servers: [this.cleanObject({
+              address: this.form.address,
+              port: Number(this.form.port),
+              users: this.form.username || this.form.password ? [{ user: this.form.username, pass: this.form.password }] : undefined,
+            })],
+          },
+          tag: this.form.remark || `${protocol}-out`,
+        };
+      },
+      cleanObject(value) {
+        if (Array.isArray(value)) {
+          return value.map((item) => this.cleanObject(item));
+        }
+        if (!value || typeof value !== 'object') return value;
+        const result = {};
+        Object.keys(value).forEach((key) => {
+          const item = value[key];
+          if (item === undefined || item === null || item === '') return;
+          result[key] = this.cleanObject(item);
+        });
+        return result;
+      },
+      refreshQr() {
+        const element = document.getElementById('proxy-qrcode');
+        if (!element || !window.QRious) return;
+        if (!this.generatedLink) {
+          const ctx = element.getContext('2d');
+          ctx.clearRect(0, 0, element.width, element.height);
+          return;
+        }
+        if (!this.qr) {
+          this.qr = new QRious({ element, size: 220, value: this.generatedLink });
+          return;
+        }
+        this.qr.value = this.generatedLink;
+      },
+      copy(text) {
+        if (!text) return;
+        const done = () => this.$message.success('{{ i18n "copied" }}');
+        const failed = () => this.$message.error('{{ i18n "fail" }}');
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(done).catch(failed);
+          return;
+        }
+        const element = document.createElement('textarea');
+        element.value = text;
+        element.setAttribute('readonly', '');
+        element.style.position = 'fixed';
+        element.style.opacity = '0';
+        document.body.appendChild(element);
+        element.select();
+        try {
+          document.execCommand('copy') ? done() : failed();
+        } catch (error) {
+          failed();
+        }
+        document.body.removeChild(element);
+      },
+    },
+  });
+</script>
+{{ template "page/body_end" .}}
