@@ -29,7 +29,7 @@ mkdir -p build/bin
 cd build/bin
 
 XRAY_REPO="${XRAY_REPO:-Lagnuty/Xray-core}"
-XRAY_VERSION="${XRAY_VERSION:-v26.7.11-lagnuty.1}"
+XRAY_VERSION="${XRAY_VERSION:-v26.7.11-lagnuty.2}"
 XRAY_VERSION_LABEL="${XRAY_VERSION_LABEL:-${XRAY_VERSION#v}}"
 
 curl -sfLRO "https://github.com/${XRAY_REPO}/releases/download/${XRAY_VERSION}/Xray-linux-${ARCH}.zip"

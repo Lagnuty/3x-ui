@@ -100,7 +100,7 @@ The current branch version is stored in `config/version`.
   - `speedLimitDownMbps`
 - Hysteria2 speed limits are emitted into Hysteria settings.
 - Docker builds now bundle the custom `Lagnuty/Xray-core`
-  `v26.7.11-lagnuty.1` release, which adds dispatcher-level per-user bandwidth
+  `v26.7.11-lagnuty.2` release, which adds dispatcher-level per-user bandwidth
   limits for shared inbounds.
 - The panel writes and reads `bin/xray-version.txt`, so the dashboard/status API
   shows the custom core label (`26.7.11-lagnuty.1`) instead of only the upstream

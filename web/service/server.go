@@ -133,7 +133,7 @@ type ServerService struct {
 const (
 	defaultXrayReleaseRepo = "XTLS/Xray-core"
 	customXrayReleaseRepo  = "Lagnuty/Xray-core"
-	customXrayVersion      = "v26.7.11-lagnuty.1"
+	customXrayVersion      = "v26.7.11-lagnuty.2"
 )
 
 func getCustomXrayReleaseRepo() string {

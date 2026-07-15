@@ -7,7 +7,7 @@ services:
         XUI_REPO: ${XUI_REPO:-https://github.com/Lagnuty/3x-ui.git}
         XUI_REF: ${XUI_REF:-3xui}
         XRAY_REPO: ${XRAY_REPO:-Lagnuty/Xray-core}
-        XRAY_VERSION: ${XRAY_VERSION:-v26.7.11-lagnuty.1}
+        XRAY_VERSION: ${XRAY_VERSION:-v26.7.11-lagnuty.2}
         XRAY_VERSION_LABEL: ${XRAY_VERSION_LABEL:-26.7.11-lagnuty.1}
     container_name: 3xui_app
     volumes:
