@@ -31,6 +31,7 @@ func NewInboundController(g *gin.RouterGroup) *InboundController {
 func (a *InboundController) initRouter(g *gin.RouterGroup) {
 
 	g.GET("/list", a.getInbounds)
+	g.GET("/listAll", a.getAllInbounds)
 	g.GET("/get/:id", a.getInbound)
 	g.GET("/getClientTraffics/:email", a.getClientTraffics)
 	g.GET("/getClientTrafficsById/:id", a.getClientTrafficsById)
@@ -58,6 +59,16 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 func (a *InboundController) getInbounds(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	inbounds, err := a.inboundService.GetInbounds(user.Id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
+		return
+	}
+	jsonObj(c, inbounds, nil)
+}
+
+// getAllInbounds retrieves the full inbound list for authenticated API integrations.
+func (a *InboundController) getAllInbounds(c *gin.Context) {
+	inbounds, err := a.inboundService.GetAllInbounds()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return

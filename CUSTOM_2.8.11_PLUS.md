@@ -24,6 +24,8 @@ The current branch version is stored in `config/version`.
 ## API and authentication
 
 - Added API token authentication through `Authorization: Bearer <token>`.
+- Added `GET /panel/api/inbounds/listAll` for authenticated integrations that
+  need to scan all inbounds regardless of the token owner's user scope.
 - API tokens are stored as SHA-256 hashes; plaintext tokens are shown only once
   at creation.
 - API tokens can be assigned to a panel user.
