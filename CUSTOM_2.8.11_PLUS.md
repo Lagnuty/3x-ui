@@ -91,12 +91,18 @@ The current branch version is stored in `config/version`.
 - Added Hysteria2 client traffic accounting using auth/email mapping.
 - Added Hysteria2 online/offline client support where Xray stats expose the
   required counters.
+- Added inbound-level Linux `tc` speed limits for the common protocols. The
+  Docker image includes `iproute2`, compose files grant `NET_ADMIN`, and limits
+  can be disabled with `XUI_TC_SPEED_LIMIT_ENABLE=false` or pointed at another
+  interface with `XUI_TC_INTERFACE`.
 - Added client speed limit fields:
   - `speedLimitUpMbps`
   - `speedLimitDownMbps`
 - Hysteria2 speed limits are emitted into Hysteria settings.
-- Other protocols currently store speed limit values for future enforcement;
-  Xray policy does not provide a universal per-client bandwidth throttle.
+- Per-client speed limits remain natively enforced only for Hysteria2; for
+  VLESS/VMess/Trojan/Shadowsocks on a shared port, use the inbound-level Linux
+  speed limit because Xray does not expose a universal per-user bandwidth
+  throttle.
 
 ## Nodes and bridges
 

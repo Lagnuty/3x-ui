@@ -390,6 +390,7 @@ func (s *XrayService) RestartXray(isForce bool) error {
 	if err != nil {
 		return err
 	}
+	s.ApplyInboundSpeedLimits()
 
 	return nil
 }

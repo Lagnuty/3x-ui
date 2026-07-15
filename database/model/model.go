@@ -80,6 +80,8 @@ type Inbound struct {
 	ExpiryTime           int64                `json:"expiryTime" form:"expiryTime"`                                                                                                                                 // Expiration timestamp
 	TrafficReset         string               `json:"trafficReset" form:"trafficReset" gorm:"default:never;index:idx_enable_traffic_reset,priority:2" validate:"omitempty,oneof=never hourly daily weekly monthly"` // Traffic reset schedule
 	LastTrafficResetTime int64                `json:"lastTrafficResetTime" form:"lastTrafficResetTime" gorm:"default:0"`                                                                                            // Last traffic reset timestamp
+	SpeedLimitUpMbps     int64                `json:"speedLimitUpMbps" form:"speedLimitUpMbps" gorm:"column:speed_limit_up_mbps;default:0"`                                                                         // Linux tc upload limit for this inbound port in Mbps; 0 means unlimited
+	SpeedLimitDownMbps   int64                `json:"speedLimitDownMbps" form:"speedLimitDownMbps" gorm:"column:speed_limit_down_mbps;default:0"`                                                                   // Linux tc download limit for this inbound port in Mbps; 0 means unlimited
 	ClientStats          []xray.ClientTraffic `gorm:"foreignKey:InboundId;references:Id" json:"clientStats" form:"clientStats"`                                                                                     // Client traffic statistics
 
 	// Xray configuration fields

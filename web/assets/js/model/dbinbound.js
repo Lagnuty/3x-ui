@@ -12,6 +12,8 @@ class DBInbound {
         this.expiryTime = 0;
         this.trafficReset = "never";
         this.lastTrafficResetTime = 0;
+        this.speedLimitUpMbps = 0;
+        this.speedLimitDownMbps = 0;
 
         this.listen = "";
         this.port = 0;
