@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
@@ -654,6 +655,45 @@ type Client struct {
 	Reset              int            `json:"reset" form:"reset"`           // Reset period in days
 	CreatedAt          int64          `json:"created_at,omitempty"`         // Creation timestamp
 	UpdatedAt          int64          `json:"updated_at,omitempty"`         // Last update timestamp
+}
+
+// UnmarshalJSON accepts tgId as a number, numeric string, or empty string.
+func (c *Client) UnmarshalJSON(data []byte) error {
+	type alias Client
+	aux := struct {
+		*alias
+		TgID json.RawMessage `json:"tgId"`
+	}{
+		alias: (*alias)(c),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	tgID, err := parseFlexibleInt64(aux.TgID)
+	if err != nil {
+		return err
+	}
+	c.TgID = tgID
+	return nil
+}
+
+func parseFlexibleInt64(raw json.RawMessage) (int64, error) {
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return 0, nil
+	}
+	var n int64
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return n, nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return 0, err
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(s, 10, 64)
 }
 
 type ClientRecord struct {
