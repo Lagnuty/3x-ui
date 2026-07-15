@@ -39,6 +39,16 @@ The current branch version is stored in `config/version`.
   or panel requests.
 - Audit logs do not store passwords, API token plaintext, or request bodies.
 
+Example API calls:
+
+```bash
+curl -k -H "Authorization: Bearer $XUI_TOKEN" \
+  https://example.com:2053/panel/api/server/status
+
+curl -k -H "Authorization: Bearer $XUI_TOKEN" \
+  https://example.com:2053/panel/api/inbounds/listAll
+```
+
 ## Server status API
 
 - `GET /panel/api/server/status` is available to API-token callers.
@@ -103,11 +113,52 @@ The current branch version is stored in `config/version`.
   `v26.7.11-lagnuty.2` release, which adds dispatcher-level per-user bandwidth
   limits for shared inbounds.
 - The panel writes and reads `bin/xray-version.txt`, so the dashboard/status API
-  shows the custom core label (`26.7.11-lagnuty.1`) instead of only the upstream
+  shows the custom core label (`26.7.11-lagnuty.2`) instead of only the upstream
   core version (`26.7.11`).
 - The Xray version switcher prepends the custom release and downloads it from
   `Lagnuty/Xray-core`; upstream versions are still downloaded from
   `XTLS/Xray-core`.
+
+### How speed limits work
+
+There are two limit layers:
+
+1. Inbound-level limits use Linux `tc` on the inbound port. This limits the whole
+   inbound port total, not each client separately. It is useful when a whole
+   inbound should have a shared cap.
+2. Client-level limits use the bundled custom `Lagnuty/Xray-core` build. Client
+   fields `speedLimitUpMbps` and `speedLimitDownMbps` are written into the Xray
+   config and applied per authenticated user/email inside Xray.
+
+For per-client limits on a shared inbound, set the inbound speed limits to `0`
+and set the limit on each client instead. If an inbound-level limit is also set,
+the port-level `tc` cap can become the bottleneck before the per-client Xray cap.
+
+When a speed-limited client is added or changed, the panel restarts Xray instead
+of using live `AddUser`, because the upstream Xray gRPC user API does not carry
+the custom speed-limit fields. The full restart makes Xray reload the complete
+JSON config with `speedLimitUpMbps` and `speedLimitDownMbps`.
+
+Example client JSON fragment:
+
+```json
+{
+  "email": "client1",
+  "id": "00000000-0000-0000-0000-000000000000",
+  "speedLimitUpMbps": 50,
+  "speedLimitDownMbps": 50
+}
+```
+
+Operational notes:
+
+- `0` means unlimited.
+- Speed tests with many parallel streams should still be limited per client, not
+  per TCP connection.
+- Existing active connections are dropped when Xray restarts; clients reconnect
+  with the new limit.
+- Docker images must use the custom Xray release shown above. Upstream Xray does
+  not understand these per-client fields.
 
 ## Nodes and bridges
 
