@@ -26,6 +26,14 @@ type InboundService struct {
 	xrayApi xray.XrayAPI
 }
 
+func clientHasSpeedLimit(client *model.Client) bool {
+	return client != nil && (client.SpeedLimitUpMbps > 0 || client.SpeedLimitDownMbps > 0)
+}
+
+func clientMapHasSpeedLimit(client map[string]any) bool {
+	return int64FromAny(client["speedLimitUpMbps"]) > 0 || int64FromAny(client["speedLimitDownMbps"]) > 0
+}
+
 // GetInbounds retrieves all inbounds for a specific user.
 // Returns a slice of inbound models with their associated client statistics.
 func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
@@ -703,7 +711,7 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 		if len(client.Email) > 0 {
 			s.AddClientStat(tx, data.Id, &client)
 			if client.Enable {
-				if oldInbound.Protocol == "hysteria" {
+				if oldInbound.Protocol == "hysteria" || clientHasSpeedLimit(&client) {
 					needRestart = true
 					continue
 				}
@@ -712,13 +720,15 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 					cipher = oldSettings["method"].(string)
 				}
 				err1 := s.xrayApi.AddUser(string(oldInbound.Protocol), oldInbound.Tag, map[string]any{
-					"email":    client.Email,
-					"id":       client.ID,
-					"security": client.Security,
-					"flow":     client.Flow,
-					"password": client.Password,
-					"auth":     client.Auth,
-					"cipher":   cipher,
+					"email":              client.Email,
+					"id":                 client.ID,
+					"security":           client.Security,
+					"flow":               client.Flow,
+					"password":           client.Password,
+					"auth":               client.Auth,
+					"cipher":             cipher,
+					"speedLimitUpMbps":   client.SpeedLimitUpMbps,
+					"speedLimitDownMbps": client.SpeedLimitDownMbps,
 				})
 				if err1 == nil {
 					logger.Debug("Client added by api:", client.Email)
@@ -995,7 +1005,7 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 			}
 		}
 		if clients[0].Enable {
-			if oldInbound.Protocol == "hysteria" {
+			if oldInbound.Protocol == "hysteria" || clientHasSpeedLimit(&clients[0]) {
 				needRestart = true
 				s.xrayApi.Close()
 				err = tx.Save(oldInbound).Error
@@ -1010,13 +1020,15 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 				cipher = oldSettings["method"].(string)
 			}
 			err1 := s.xrayApi.AddUser(string(oldInbound.Protocol), oldInbound.Tag, map[string]any{
-				"email":    clients[0].Email,
-				"id":       clients[0].ID,
-				"security": clients[0].Security,
-				"flow":     clients[0].Flow,
-				"password": clients[0].Password,
-				"auth":     clients[0].Auth,
-				"cipher":   cipher,
+				"email":              clients[0].Email,
+				"id":                 clients[0].ID,
+				"security":           clients[0].Security,
+				"flow":               clients[0].Flow,
+				"password":           clients[0].Password,
+				"auth":               clients[0].Auth,
+				"cipher":             cipher,
+				"speedLimitUpMbps":   clients[0].SpeedLimitUpMbps,
+				"speedLimitDownMbps": clients[0].SpeedLimitDownMbps,
 			})
 			if err1 == nil {
 				logger.Debug("Client edited by api:", clients[0].Email)
@@ -1521,6 +1533,10 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB) (bool, int64, error) {
 			return true, int64(len(traffics)), nil
 		}
 		for _, clientToAdd := range clientsToAdd {
+			if clientMapHasSpeedLimit(clientToAdd.client) {
+				needRestart = true
+				continue
+			}
 			err1 = s.xrayApi.AddUser(clientToAdd.protocol, clientToAdd.tag, clientToAdd.client)
 			if err1 != nil {
 				needRestart = true
@@ -2112,7 +2128,7 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 		}
 		for _, client := range clients {
 			if client.Email == clientEmail && client.Enable {
-				if inbound.Protocol == "hysteria" {
+				if inbound.Protocol == "hysteria" || clientHasSpeedLimit(&client) {
 					needRestart = true
 					break
 				}
@@ -2127,13 +2143,15 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 					cipher = oldSettings["method"].(string)
 				}
 				err1 := s.xrayApi.AddUser(string(inbound.Protocol), inbound.Tag, map[string]any{
-					"email":    client.Email,
-					"id":       client.ID,
-					"security": client.Security,
-					"flow":     client.Flow,
-					"password": client.Password,
-					"auth":     client.Auth,
-					"cipher":   cipher,
+					"email":              client.Email,
+					"id":                 client.ID,
+					"security":           client.Security,
+					"flow":               client.Flow,
+					"password":           client.Password,
+					"auth":               client.Auth,
+					"cipher":             cipher,
+					"speedLimitUpMbps":   client.SpeedLimitUpMbps,
+					"speedLimitDownMbps": client.SpeedLimitDownMbps,
 				})
 				if err1 == nil {
 					logger.Debug("Client enabled due to reset traffic:", clientEmail)
