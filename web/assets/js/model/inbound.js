@@ -1803,13 +1803,19 @@ class Inbound extends XrayCommonClass {
         return url.toString();
     }
 
-    genHysteriaLink(address = '', port = this.port, remark = '', clientAuth) {
+    genHysteriaLink(address = '', port = this.port, remark = '', client) {
         if (this.protocol !== Protocols.HYSTERIA || this.stream.security !== 'tls') {
             return '';
         }
         const scheme = this.settings.version === 2 ? 'hysteria2' : 'hysteria';
-        const url = new URL(`${scheme}://${clientAuth}@${address}:${port}`);
+        const url = new URL(`${scheme}://${client.auth}@${address}:${port}`);
         url.searchParams.set("security", "tls");
+        if (client.speedLimitUpMbps > 0) {
+            url.searchParams.set("up", `${client.speedLimitUpMbps} mbps`);
+        }
+        if (client.speedLimitDownMbps > 0) {
+            url.searchParams.set("down", `${client.speedLimitDownMbps} mbps`);
+        }
         if (this.stream.tls.settings.fingerprint) {
             url.searchParams.set("fp", this.stream.tls.settings.fingerprint);
         }
@@ -1866,7 +1872,7 @@ class Inbound extends XrayCommonClass {
             case Protocols.TROJAN:
                 return this.genTrojanLink(address, port, forceTls, remark, client.password);
             case Protocols.HYSTERIA:
-                return this.genHysteriaLink(address, port, remark, client.auth);
+                return this.genHysteriaLink(address, port, remark, client);
             default: return '';
         }
     }
@@ -2052,7 +2058,9 @@ Inbound.VmessSettings.VMESS = class extends XrayCommonClass {
         comment = '',
         reset = 0,
         created_at = undefined,
-        updated_at = undefined
+        updated_at = undefined,
+        speedLimitUpMbps = 0,
+        speedLimitDownMbps = 0
     ) {
         super();
         this.id = id;
@@ -2068,6 +2076,8 @@ Inbound.VmessSettings.VMESS = class extends XrayCommonClass {
         this.reset = reset;
         this.created_at = created_at;
         this.updated_at = updated_at;
+        this.speedLimitUpMbps = speedLimitUpMbps ?? 0;
+        this.speedLimitDownMbps = speedLimitDownMbps ?? 0;
     }
 
     static fromJson(json = {}) {
@@ -2085,6 +2095,8 @@ Inbound.VmessSettings.VMESS = class extends XrayCommonClass {
             json.reset,
             json.created_at,
             json.updated_at,
+            json.speedLimitUpMbps,
+            json.speedLimitDownMbps,
         );
     }
     get _expiryTime() {
@@ -2207,7 +2219,9 @@ Inbound.VLESSSettings.VLESS = class extends XrayCommonClass {
         comment = '',
         reset = 0,
         created_at = undefined,
-        updated_at = undefined
+        updated_at = undefined,
+        speedLimitUpMbps = 0,
+        speedLimitDownMbps = 0
     ) {
         super();
         this.id = id;
@@ -2223,6 +2237,8 @@ Inbound.VLESSSettings.VLESS = class extends XrayCommonClass {
         this.reset = reset;
         this.created_at = created_at;
         this.updated_at = updated_at;
+        this.speedLimitUpMbps = speedLimitUpMbps ?? 0;
+        this.speedLimitDownMbps = speedLimitDownMbps ?? 0;
     }
 
     static fromJson(json = {}) {
@@ -2240,6 +2256,8 @@ Inbound.VLESSSettings.VLESS = class extends XrayCommonClass {
             json.reset,
             json.created_at,
             json.updated_at,
+            json.speedLimitUpMbps,
+            json.speedLimitDownMbps,
         );
     }
 
@@ -2352,7 +2370,9 @@ Inbound.TrojanSettings.Trojan = class extends XrayCommonClass {
         comment = '',
         reset = 0,
         created_at = undefined,
-        updated_at = undefined
+        updated_at = undefined,
+        speedLimitUpMbps = 0,
+        speedLimitDownMbps = 0
     ) {
         super();
         this.password = password;
@@ -2367,6 +2387,8 @@ Inbound.TrojanSettings.Trojan = class extends XrayCommonClass {
         this.reset = reset;
         this.created_at = created_at;
         this.updated_at = updated_at;
+        this.speedLimitUpMbps = speedLimitUpMbps ?? 0;
+        this.speedLimitDownMbps = speedLimitDownMbps ?? 0;
     }
 
     toJson() {
@@ -2383,6 +2405,8 @@ Inbound.TrojanSettings.Trojan = class extends XrayCommonClass {
             reset: this.reset,
             created_at: this.created_at,
             updated_at: this.updated_at,
+            speedLimitUpMbps: this.speedLimitUpMbps,
+            speedLimitDownMbps: this.speedLimitDownMbps,
         };
     }
 
@@ -2400,6 +2424,8 @@ Inbound.TrojanSettings.Trojan = class extends XrayCommonClass {
             json.reset,
             json.created_at,
             json.updated_at,
+            json.speedLimitUpMbps,
+            json.speedLimitDownMbps,
         );
     }
 
@@ -2521,7 +2547,9 @@ Inbound.ShadowsocksSettings.Shadowsocks = class extends XrayCommonClass {
         comment = '',
         reset = 0,
         created_at = undefined,
-        updated_at = undefined
+        updated_at = undefined,
+        speedLimitUpMbps = 0,
+        speedLimitDownMbps = 0
     ) {
         super();
         this.method = method;
@@ -2554,6 +2582,8 @@ Inbound.ShadowsocksSettings.Shadowsocks = class extends XrayCommonClass {
             reset: this.reset,
             created_at: this.created_at,
             updated_at: this.updated_at,
+            speedLimitUpMbps: this.speedLimitUpMbps,
+            speedLimitDownMbps: this.speedLimitDownMbps,
         };
     }
 
@@ -2572,6 +2602,8 @@ Inbound.ShadowsocksSettings.Shadowsocks = class extends XrayCommonClass {
             json.reset,
             json.created_at,
             json.updated_at,
+            json.speedLimitUpMbps,
+            json.speedLimitDownMbps,
         );
     }
 
@@ -2862,7 +2894,9 @@ Inbound.HysteriaSettings.Hysteria = class extends XrayCommonClass {
         comment = '',
         reset = 0,
         created_at = undefined,
-        updated_at = undefined
+        updated_at = undefined,
+        speedLimitUpMbps = 0,
+        speedLimitDownMbps = 0
     ) {
         super();
         this.auth = auth;
@@ -2877,6 +2911,8 @@ Inbound.HysteriaSettings.Hysteria = class extends XrayCommonClass {
         this.reset = reset;
         this.created_at = created_at;
         this.updated_at = updated_at;
+        this.speedLimitUpMbps = speedLimitUpMbps ?? 0;
+        this.speedLimitDownMbps = speedLimitDownMbps ?? 0;
     }
 
     toJson() {
@@ -2893,6 +2929,8 @@ Inbound.HysteriaSettings.Hysteria = class extends XrayCommonClass {
             reset: this.reset,
             created_at: this.created_at,
             updated_at: this.updated_at,
+            speedLimitUpMbps: this.speedLimitUpMbps,
+            speedLimitDownMbps: this.speedLimitDownMbps,
         };
     }
 
@@ -2910,6 +2948,8 @@ Inbound.HysteriaSettings.Hysteria = class extends XrayCommonClass {
             json.reset,
             json.created_at,
             json.updated_at,
+            json.speedLimitUpMbps,
+            json.speedLimitDownMbps,
         );
     }
 

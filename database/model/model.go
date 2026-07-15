@@ -588,46 +588,50 @@ type ClientReverse struct {
 
 // Client represents a client configuration for Xray inbounds with traffic limits and settings.
 type Client struct {
-	ID         string         `json:"id,omitempty"`                 // Unique client identifier
-	Security   string         `json:"security"`                     // Security method (e.g., "auto", "aes-128-gcm")
-	Password   string         `json:"password,omitempty"`           // Client password
-	Flow       string         `json:"flow,omitempty"`               // Flow control (XTLS)
-	Reverse    *ClientReverse `json:"reverse,omitempty"`            // VLESS simple reverse proxy settings
-	Auth       string         `json:"auth,omitempty"`               // Auth password (Hysteria)
-	Email      string         `json:"email"`                        // Client email identifier
-	LimitIP    int            `json:"limitIp"`                      // IP limit for this client
-	TotalGB    int64          `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
-	ExpiryTime int64          `json:"expiryTime" form:"expiryTime"` // Expiration timestamp
-	Enable     bool           `json:"enable" form:"enable"`         // Whether the client is enabled
-	TgID       int64          `json:"tgId" form:"tgId"`             // Telegram user ID for notifications
-	SubID      string         `json:"subId" form:"subId"`           // Subscription identifier
-	Group      string         `json:"group,omitempty" form:"group"` // Logical grouping label
-	Comment    string         `json:"comment" form:"comment"`       // Client comment
-	Reset      int            `json:"reset" form:"reset"`           // Reset period in days
-	CreatedAt  int64          `json:"created_at,omitempty"`         // Creation timestamp
-	UpdatedAt  int64          `json:"updated_at,omitempty"`         // Last update timestamp
+	ID                 string         `json:"id,omitempty"`                 // Unique client identifier
+	Security           string         `json:"security"`                     // Security method (e.g., "auto", "aes-128-gcm")
+	Password           string         `json:"password,omitempty"`           // Client password
+	Flow               string         `json:"flow,omitempty"`               // Flow control (XTLS)
+	Reverse            *ClientReverse `json:"reverse,omitempty"`            // VLESS simple reverse proxy settings
+	Auth               string         `json:"auth,omitempty"`               // Auth password (Hysteria)
+	Email              string         `json:"email"`                        // Client email identifier
+	LimitIP            int            `json:"limitIp"`                      // IP limit for this client
+	TotalGB            int64          `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
+	SpeedLimitUpMbps   int64          `json:"speedLimitUpMbps,omitempty"`   // Upload speed limit in Mbps; 0 means unlimited
+	SpeedLimitDownMbps int64          `json:"speedLimitDownMbps,omitempty"` // Download speed limit in Mbps; 0 means unlimited
+	ExpiryTime         int64          `json:"expiryTime" form:"expiryTime"` // Expiration timestamp
+	Enable             bool           `json:"enable" form:"enable"`         // Whether the client is enabled
+	TgID               int64          `json:"tgId" form:"tgId"`             // Telegram user ID for notifications
+	SubID              string         `json:"subId" form:"subId"`           // Subscription identifier
+	Group              string         `json:"group,omitempty" form:"group"` // Logical grouping label
+	Comment            string         `json:"comment" form:"comment"`       // Client comment
+	Reset              int            `json:"reset" form:"reset"`           // Reset period in days
+	CreatedAt          int64          `json:"created_at,omitempty"`         // Creation timestamp
+	UpdatedAt          int64          `json:"updated_at,omitempty"`         // Last update timestamp
 }
 
 type ClientRecord struct {
-	Id         int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Email      string `json:"email" gorm:"uniqueIndex;not null"`
-	SubID      string `json:"subId" gorm:"index;column:sub_id"`
-	UUID       string `json:"uuid" gorm:"column:uuid"`
-	Password   string `json:"password"`
-	Auth       string `json:"auth"`
-	Flow       string `json:"flow"`
-	Security   string `json:"security"`
-	Reverse    string `json:"reverse" gorm:"column:reverse"`
-	LimitIP    int    `json:"limitIp" gorm:"column:limit_ip"`
-	TotalGB    int64  `json:"totalGB" gorm:"column:total_gb"`
-	ExpiryTime int64  `json:"expiryTime" gorm:"column:expiry_time"`
-	Enable     bool   `json:"enable" gorm:"default:true"`
-	TgID       int64  `json:"tgId" gorm:"column:tg_id"`
-	Group      string `json:"group" gorm:"column:group_name;default:''"`
-	Comment    string `json:"comment"`
-	Reset      int    `json:"reset" gorm:"default:0"`
-	CreatedAt  int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
-	UpdatedAt  int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	Id                 int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email              string `json:"email" gorm:"uniqueIndex;not null"`
+	SubID              string `json:"subId" gorm:"index;column:sub_id"`
+	UUID               string `json:"uuid" gorm:"column:uuid"`
+	Password           string `json:"password"`
+	Auth               string `json:"auth"`
+	Flow               string `json:"flow"`
+	Security           string `json:"security"`
+	Reverse            string `json:"reverse" gorm:"column:reverse"`
+	LimitIP            int    `json:"limitIp" gorm:"column:limit_ip"`
+	TotalGB            int64  `json:"totalGB" gorm:"column:total_gb"`
+	SpeedLimitUpMbps   int64  `json:"speedLimitUpMbps" gorm:"column:speed_limit_up_mbps;default:0"`
+	SpeedLimitDownMbps int64  `json:"speedLimitDownMbps" gorm:"column:speed_limit_down_mbps;default:0"`
+	ExpiryTime         int64  `json:"expiryTime" gorm:"column:expiry_time"`
+	Enable             bool   `json:"enable" gorm:"default:true"`
+	TgID               int64  `json:"tgId" gorm:"column:tg_id"`
+	Group              string `json:"group" gorm:"column:group_name;default:''"`
+	Comment            string `json:"comment"`
+	Reset              int    `json:"reset" gorm:"default:0"`
+	CreatedAt          int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt          int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 }
 
 func (ClientRecord) TableName() string { return "clients" }
@@ -697,23 +701,25 @@ func (InboundFallback) TableName() string { return "inbound_fallbacks" }
 
 func (c *Client) ToRecord() *ClientRecord {
 	rec := &ClientRecord{
-		Email:      c.Email,
-		SubID:      c.SubID,
-		UUID:       c.ID,
-		Password:   c.Password,
-		Auth:       c.Auth,
-		Flow:       c.Flow,
-		Security:   c.Security,
-		LimitIP:    c.LimitIP,
-		TotalGB:    c.TotalGB,
-		ExpiryTime: c.ExpiryTime,
-		Enable:     c.Enable,
-		TgID:       c.TgID,
-		Group:      c.Group,
-		Comment:    c.Comment,
-		Reset:      c.Reset,
-		CreatedAt:  c.CreatedAt,
-		UpdatedAt:  c.UpdatedAt,
+		Email:              c.Email,
+		SubID:              c.SubID,
+		UUID:               c.ID,
+		Password:           c.Password,
+		Auth:               c.Auth,
+		Flow:               c.Flow,
+		Security:           c.Security,
+		LimitIP:            c.LimitIP,
+		TotalGB:            c.TotalGB,
+		SpeedLimitUpMbps:   c.SpeedLimitUpMbps,
+		SpeedLimitDownMbps: c.SpeedLimitDownMbps,
+		ExpiryTime:         c.ExpiryTime,
+		Enable:             c.Enable,
+		TgID:               c.TgID,
+		Group:              c.Group,
+		Comment:            c.Comment,
+		Reset:              c.Reset,
+		CreatedAt:          c.CreatedAt,
+		UpdatedAt:          c.UpdatedAt,
 	}
 	if c.Reverse != nil {
 		if b, err := json.Marshal(c.Reverse); err == nil {
@@ -725,23 +731,25 @@ func (c *Client) ToRecord() *ClientRecord {
 
 func (r *ClientRecord) ToClient() *Client {
 	c := &Client{
-		ID:         r.UUID,
-		Email:      r.Email,
-		SubID:      r.SubID,
-		Password:   r.Password,
-		Auth:       r.Auth,
-		Flow:       r.Flow,
-		Security:   r.Security,
-		LimitIP:    r.LimitIP,
-		TotalGB:    r.TotalGB,
-		ExpiryTime: r.ExpiryTime,
-		Enable:     r.Enable,
-		TgID:       r.TgID,
-		Group:      r.Group,
-		Comment:    r.Comment,
-		Reset:      r.Reset,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
+		ID:                 r.UUID,
+		Email:              r.Email,
+		SubID:              r.SubID,
+		Password:           r.Password,
+		Auth:               r.Auth,
+		Flow:               r.Flow,
+		Security:           r.Security,
+		LimitIP:            r.LimitIP,
+		TotalGB:            r.TotalGB,
+		SpeedLimitUpMbps:   r.SpeedLimitUpMbps,
+		SpeedLimitDownMbps: r.SpeedLimitDownMbps,
+		ExpiryTime:         r.ExpiryTime,
+		Enable:             r.Enable,
+		TgID:               r.TgID,
+		Group:              r.Group,
+		Comment:            r.Comment,
+		Reset:              r.Reset,
+		CreatedAt:          r.CreatedAt,
+		UpdatedAt:          r.UpdatedAt,
 	}
 	if r.Reverse != "" {
 		var rev ClientReverse
@@ -835,6 +843,26 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 		if picked != existing.TotalGB {
 			keep("totalGB", existing.TotalGB, incoming.TotalGB, picked)
 			existing.TotalGB = picked
+		}
+	}
+	if existing.SpeedLimitUpMbps != incoming.SpeedLimitUpMbps {
+		picked := existing.SpeedLimitUpMbps
+		if existing.SpeedLimitUpMbps == 0 || (incoming.SpeedLimitUpMbps != 0 && incoming.SpeedLimitUpMbps < existing.SpeedLimitUpMbps) {
+			picked = incoming.SpeedLimitUpMbps
+		}
+		if picked != existing.SpeedLimitUpMbps {
+			keep("speedLimitUpMbps", existing.SpeedLimitUpMbps, incoming.SpeedLimitUpMbps, picked)
+			existing.SpeedLimitUpMbps = picked
+		}
+	}
+	if existing.SpeedLimitDownMbps != incoming.SpeedLimitDownMbps {
+		picked := existing.SpeedLimitDownMbps
+		if existing.SpeedLimitDownMbps == 0 || (incoming.SpeedLimitDownMbps != 0 && incoming.SpeedLimitDownMbps < existing.SpeedLimitDownMbps) {
+			picked = incoming.SpeedLimitDownMbps
+		}
+		if picked != existing.SpeedLimitDownMbps {
+			keep("speedLimitDownMbps", existing.SpeedLimitDownMbps, incoming.SpeedLimitDownMbps, picked)
+			existing.SpeedLimitDownMbps = picked
 		}
 	}
 	if existing.ExpiryTime != incoming.ExpiryTime {

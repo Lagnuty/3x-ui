@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -159,7 +160,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 					}
 				}
 				for key := range c {
-					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" && key != "auth" {
+					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" && key != "auth" && key != "speedLimitUpMbps" && key != "speedLimitDownMbps" {
 						delete(c, key)
 					}
 					if c["flow"] == "xtls-rprx-vision-udp443" {
@@ -219,6 +220,8 @@ func (s *XrayService) syncHysteriaRuntimeAuth(inbound *model.Inbound, clients []
 	}
 
 	auth := ""
+	speedLimitUpMbps := int64(0)
+	speedLimitDownMbps := int64(0)
 	for _, client := range clients {
 		c, ok := client.(map[string]any)
 		if !ok {
@@ -229,6 +232,8 @@ func (s *XrayService) syncHysteriaRuntimeAuth(inbound *model.Inbound, clients []
 		}
 		if value, ok := c["auth"].(string); ok && strings.TrimSpace(value) != "" {
 			auth = strings.TrimSpace(value)
+			speedLimitUpMbps = int64FromAny(c["speedLimitUpMbps"])
+			speedLimitDownMbps = int64FromAny(c["speedLimitDownMbps"])
 			break
 		}
 	}
@@ -256,6 +261,16 @@ func (s *XrayService) syncHysteriaRuntimeAuth(inbound *model.Inbound, clients []
 	}
 	hysteriaSettings["version"] = 2
 	hysteriaSettings["auth"] = auth
+	if speedLimitUpMbps > 0 {
+		hysteriaSettings["up"] = fmt.Sprintf("%d mbps", speedLimitUpMbps)
+	} else {
+		delete(hysteriaSettings, "up")
+	}
+	if speedLimitDownMbps > 0 {
+		hysteriaSettings["down"] = fmt.Sprintf("%d mbps", speedLimitDownMbps)
+	} else {
+		delete(hysteriaSettings, "down")
+	}
 	if _, ok := hysteriaSettings["udpIdleTimeout"]; !ok {
 		hysteriaSettings["udpIdleTimeout"] = 60
 	}
@@ -266,6 +281,22 @@ func (s *XrayService) syncHysteriaRuntimeAuth(inbound *model.Inbound, clients []
 		return
 	}
 	inbound.StreamSettings = string(raw)
+}
+
+func int64FromAny(value any) int64 {
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	case json.Number:
+		i, _ := v.Int64()
+		return i
+	default:
+		return 0
+	}
 }
 
 func (s *XrayService) mergeOutboundSubscriptions(xrayConfig *xray.Config) error {

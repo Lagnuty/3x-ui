@@ -411,6 +411,16 @@ func (s *SubJsonService) genHysteria(inbound *model.Inbound, stream map[string]a
 	}
 	hysteriaSettings["version"] = version
 	hysteriaSettings["auth"] = client.Auth
+	if client.SpeedLimitUpMbps > 0 {
+		hysteriaSettings["up"] = fmt.Sprintf("%d mbps", client.SpeedLimitUpMbps)
+	} else {
+		delete(hysteriaSettings, "up")
+	}
+	if client.SpeedLimitDownMbps > 0 {
+		hysteriaSettings["down"] = fmt.Sprintf("%d mbps", client.SpeedLimitDownMbps)
+	} else {
+		delete(hysteriaSettings, "down")
+	}
 	if _, ok := hysteriaSettings["udpIdleTimeout"]; !ok {
 		hysteriaSettings["udpIdleTimeout"] = 60
 	}

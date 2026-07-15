@@ -928,6 +928,12 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 
 	params := make(map[string]string)
 	params["security"] = "tls"
+	if clients[clientIndex].SpeedLimitUpMbps > 0 {
+		params["up"] = fmt.Sprintf("%d mbps", clients[clientIndex].SpeedLimitUpMbps)
+	}
+	if clients[clientIndex].SpeedLimitDownMbps > 0 {
+		params["down"] = fmt.Sprintf("%d mbps", clients[clientIndex].SpeedLimitDownMbps)
+	}
 	if tlsSetting, ok := stream["tlsSettings"].(map[string]any); ok {
 		if alpns, ok := tlsSetting["alpn"].([]any); ok {
 			alpn := make([]string, 0, len(alpns))
