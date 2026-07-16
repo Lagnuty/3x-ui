@@ -113,6 +113,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	if err := s.mergeOutboundSubscriptions(xrayConfig); err != nil {
 		return nil, err
 	}
+	if err := s.injectClientBridgeRoutes(xrayConfig); err != nil {
+		return nil, err
+	}
 	if egressTag, err := s.settingService.GetPanelOutbound(); err != nil {
 		logger.Warning("read panelOutbound setting failed:", err)
 	} else if strings.TrimSpace(egressTag) != "" {
@@ -342,6 +345,61 @@ func (s *XrayService) mergeOutboundSubscriptions(xrayConfig *xray.Config) error 
 		return err
 	}
 	xrayConfig.OutboundConfigs = raw
+	return nil
+}
+
+func (s *XrayService) injectClientBridgeRoutes(xrayConfig *xray.Config) error {
+	bridgeService := &BridgeService{}
+	routes, err := bridgeService.EnabledRoutes()
+	if err != nil {
+		return err
+	}
+	if len(routes) == 0 {
+		return nil
+	}
+	routing := map[string]any{}
+	if len(xrayConfig.RouterConfig) > 0 {
+		if err := json.Unmarshal(xrayConfig.RouterConfig, &routing); err != nil {
+			return err
+		}
+	}
+	rules, _ := routing["rules"].([]any)
+	injected := make([]any, 0, len(routes))
+	for _, route := range routes {
+		if route == nil || strings.TrimSpace(route.OutboundTag) == "" || len(route.ClientEmails) == 0 {
+			continue
+		}
+		users := make([]any, 0, len(route.ClientEmails))
+		for _, email := range route.ClientEmails {
+			email = strings.TrimSpace(email)
+			if email != "" {
+				users = append(users, email)
+			}
+		}
+		if len(users) == 0 {
+			continue
+		}
+		rule := map[string]any{
+			"type": "field",
+			"user": users,
+		}
+		tag := strings.TrimSpace(route.OutboundTag)
+		if routingTagIsBalancer(routing, tag) {
+			rule["balancerTag"] = tag
+		} else {
+			rule["outboundTag"] = tag
+		}
+		injected = append(injected, rule)
+	}
+	if len(injected) == 0 {
+		return nil
+	}
+	routing["rules"] = append(injected, rules...)
+	raw, err := json.Marshal(routing)
+	if err != nil {
+		return err
+	}
+	xrayConfig.RouterConfig = json_util.RawMessage(raw)
 	return nil
 }
 

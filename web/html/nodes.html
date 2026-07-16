@@ -60,6 +60,45 @@
               </a-table>
             </a-card>
           </a-col>
+          <a-col>
+            <a-card hoverable>
+              <template #title>
+                <a-space>
+                  <span>Client bridges</span>
+                  <a-button icon="reload" @click="loadBridges">Refresh</a-button>
+                  <a-button type="primary" icon="fork" @click="openBridge()">Add bridge</a-button>
+                </a-space>
+              </template>
+              <a-alert
+                type="info"
+                show-icon
+                message="Bridge sends selected clients to the chosen outbound tag. Create the next-node protocol in Xray settings / Outbounds or the Proxy tab first."
+                style="margin-bottom: 12px;">
+              </a-alert>
+              <a-table
+                size="small"
+                row-key="id"
+                :columns="bridgeColumns"
+                :data-source="bridges"
+                :pagination="{ pageSize: 20 }"
+                :scroll="{ x: 920 }">
+                <template slot="bridgeStatus" slot-scope="text, row">
+                  <a-switch :checked="row.enable" @change="value => setBridgeEnable(row, value)"></a-switch>
+                </template>
+                <template slot="bridgeClients" slot-scope="text, row">
+                  <a-tag v-for="email in row.clientEmails" :key="email">[[ email ]]</a-tag>
+                </template>
+                <template slot="bridgeActions" slot-scope="text, row">
+                  <a-space>
+                    <a-button size="small" icon="edit" @click="openBridge(row)">Edit</a-button>
+                    <a-popconfirm title="Delete this bridge?" @confirm="deleteBridge(row)">
+                      <a-button size="small" type="danger" icon="delete">Delete</a-button>
+                    </a-popconfirm>
+                  </a-space>
+                </template>
+              </a-table>
+            </a-card>
+          </a-col>
         </a-row>
       </a-spin>
     </a-layout-content>
@@ -159,6 +198,49 @@
       <a-button type="primary" @click="saveNode">Save</a-button>
     </template>
   </a-modal>
+
+  <a-modal v-model="bridgeModal.visible" :title="bridgeModal.form.id ? 'Edit bridge' : 'Add bridge'" width="760px" @ok="saveBridge">
+    <a-form layout="vertical">
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="12">
+          <a-form-item label="Name">
+            <a-input v-model="bridgeModal.form.name" placeholder="nl-to-de"></a-input>
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="12">
+          <a-form-item label="Outbound tag / next node">
+            <a-select
+              v-model="bridgeModal.form.outboundTag"
+              show-search
+              :style="{ width: '100%' }"
+              placeholder="Select outbound tag">
+              <a-select-option v-for="tag in outboundTags" :key="tag" :value="tag">[[ tag ]]</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Clients that go through this bridge">
+        <a-select
+          v-model="bridgeModal.form.clientEmails"
+          mode="multiple"
+          show-search
+          :style="{ width: '100%' }"
+          placeholder="Select clients">
+          <a-select-option v-for="client in clientOptions" :key="client.email" :value="client.email">
+            [[ client.email ]]
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="Remark">
+        <a-input v-model="bridgeModal.form.remark"></a-input>
+      </a-form-item>
+      <a-checkbox v-model="bridgeModal.form.enable">Enable</a-checkbox>
+    </a-form>
+    <template slot="footer">
+      <a-button @click="bridgeModal.visible = false">Cancel</a-button>
+      <a-button type="primary" @click="saveBridge">Save and restart Xray</a-button>
+    </template>
+  </a-modal>
 </a-layout>
 
 {{ template "page/body_scripts" .}}
@@ -175,7 +257,14 @@
         loading: false,
         search: '',
         nodes: [],
+        bridges: [],
+        outboundTags: [],
+        clientOptions: [],
         nodeModal: {
+          visible: false,
+          form: {},
+        },
+        bridgeModal: {
           visible: false,
           form: {},
         },
@@ -188,6 +277,13 @@
           { title: 'Counts', key: 'counts', scopedSlots: { customRender: 'counts' }, width: 170 },
           { title: 'Enable', key: 'enabled', scopedSlots: { customRender: 'enabled' }, width: 90 },
           { title: 'Actions', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 230 },
+        ],
+        bridgeColumns: [
+          { title: 'Name', dataIndex: 'name', key: 'name', width: 180 },
+          { title: 'Outbound tag', dataIndex: 'outboundTag', key: 'outboundTag', width: 180 },
+          { title: 'Clients', key: 'bridgeClients', scopedSlots: { customRender: 'bridgeClients' }, width: 360 },
+          { title: 'Enable', key: 'bridgeStatus', scopedSlots: { customRender: 'bridgeStatus' }, width: 90 },
+          { title: 'Actions', key: 'bridgeActions', scopedSlots: { customRender: 'bridgeActions' }, width: 180 },
         ],
       };
     },
@@ -204,6 +300,9 @@
     },
     mounted() {
       this.loadNodes();
+      this.loadBridgeOptions();
+      this.loadClients();
+      this.loadBridges();
     },
     methods: {
       defaultForm() {
@@ -224,6 +323,16 @@
           inboundTags: [],
         };
       },
+      defaultBridgeForm() {
+        return {
+          id: 0,
+          name: '',
+          remark: '',
+          enable: true,
+          outboundTag: '',
+          clientEmails: [],
+        };
+      },
       async loadNodes() {
         this.loading = true;
         try {
@@ -237,12 +346,39 @@
           this.loading = false;
         }
       },
+      async loadBridgeOptions() {
+        const res = await axios.get('panel/api/bridges/options');
+        if (res.data && res.data.success) {
+          this.outboundTags = (res.data.obj && res.data.obj.outboundTags) || [];
+        }
+      },
+      async loadClients() {
+        const res = await axios.get('panel/api/clients/list');
+        if (res.data && res.data.success) {
+          this.clientOptions = res.data.obj || [];
+        }
+      },
+      async loadBridges() {
+        const res = await axios.get('panel/api/bridges/list');
+        if (res.data && res.data.success) {
+          this.bridges = res.data.obj || [];
+        } else {
+          this.$message.error(res.data.msg || 'Unable to load bridges');
+        }
+      },
       openNode(row) {
         this.nodeModal.form = Object.assign(this.defaultForm(), row ? JSON.parse(JSON.stringify(row)) : {});
         if (!Array.isArray(this.nodeModal.form.inboundTags)) {
           this.nodeModal.form.inboundTags = [];
         }
         this.nodeModal.visible = true;
+      },
+      openBridge(row) {
+        this.bridgeModal.form = Object.assign(this.defaultBridgeForm(), row ? JSON.parse(JSON.stringify(row)) : {});
+        if (!Array.isArray(this.bridgeModal.form.clientEmails)) {
+          this.bridgeModal.form.clientEmails = [];
+        }
+        this.bridgeModal.visible = true;
       },
       async saveNode() {
         const form = Object.assign({}, this.nodeModal.form);
@@ -254,6 +390,36 @@
           await this.loadNodes();
         } else {
           this.$message.error(res.data.msg || 'Save failed');
+        }
+      },
+      async saveBridge() {
+        const form = Object.assign({}, this.bridgeModal.form);
+        const path = form.id ? `panel/api/bridges/update/${form.id}` : 'panel/api/bridges/add';
+        const res = await axios.post(path, form);
+        if (res.data && res.data.success) {
+          this.$message.success('Bridge saved');
+          this.bridgeModal.visible = false;
+          await this.loadBridges();
+        } else {
+          this.$message.error(res.data.msg || 'Bridge save failed');
+        }
+      },
+      async setBridgeEnable(row, enable) {
+        const old = row.enable;
+        row.enable = enable;
+        const res = await axios.post(`panel/api/bridges/setEnable/${row.id}`, { enable });
+        if (!res.data || !res.data.success) {
+          row.enable = old;
+          this.$message.error(res.data.msg || 'Update failed');
+        }
+      },
+      async deleteBridge(row) {
+        const res = await axios.post(`panel/api/bridges/del/${row.id}`);
+        if (res.data && res.data.success) {
+          this.$message.success('Bridge deleted');
+          await this.loadBridges();
+        } else {
+          this.$message.error(res.data.msg || 'Delete failed');
         }
       },
       async testModalNode() {

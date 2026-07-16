@@ -87,6 +87,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	nodes := api.Group("/nodes")
 	NewNodeController(nodes)
 
+	// Client bridge routing API
+	bridges := api.Group("/bridges")
+	NewBridgeController(bridges)
+
 	// Server API
 	server := api.Group("/server")
 	a.serverController = NewServerController(server)
