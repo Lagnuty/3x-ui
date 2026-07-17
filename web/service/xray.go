@@ -191,7 +191,12 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			var stream map[string]any
 			json.Unmarshal([]byte(inbound.StreamSettings), &stream)
 
-			// Remove the "settings" field under "tlsSettings" and "realitySettings"
+			normalizeLegacyTLSSettings(stream)
+			if err := validateInboundTLSCertificates(inbound.Id, inbound.Remark, stream); err != nil {
+				return nil, err
+			}
+
+			// Remove client-side helper "settings" fields before passing the stream to xray-core.
 			tlsSettings, ok1 := stream["tlsSettings"].(map[string]any)
 			realitySettings, ok2 := stream["realitySettings"].(map[string]any)
 			if ok1 || ok2 {
@@ -215,6 +220,67 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
 	return xrayConfig, nil
+}
+
+func normalizeLegacyTLSSettings(stream map[string]any) {
+	if stream == nil {
+		return
+	}
+	tlsSettings, ok := stream["tlsSettings"].(map[string]any)
+	if !ok {
+		return
+	}
+	settings, ok := tlsSettings["settings"].(map[string]any)
+	if !ok {
+		return
+	}
+	if _, hasTopLevel := tlsSettings["certificates"]; !hasTopLevel {
+		if certs, ok := settings["certificates"]; ok {
+			tlsSettings["certificates"] = certs
+		}
+	}
+	delete(settings, "certificates")
+	delete(settings, "domains")
+}
+
+func validateInboundTLSCertificates(id int, remark string, stream map[string]any) error {
+	if stream == nil || stream["security"] != "tls" {
+		return nil
+	}
+	tlsSettings, ok := stream["tlsSettings"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("inbound %d (%s) uses TLS but has no tlsSettings", id, remark)
+	}
+	rawCerts, ok := tlsSettings["certificates"].([]any)
+	if !ok || len(rawCerts) == 0 {
+		return fmt.Errorf("inbound %d (%s) uses TLS but has no certificates configured", id, remark)
+	}
+	for _, raw := range rawCerts {
+		cert, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		certFile, _ := cert["certificateFile"].(string)
+		keyFile, _ := cert["keyFile"].(string)
+		if strings.TrimSpace(certFile) != "" && strings.TrimSpace(keyFile) != "" {
+			return nil
+		}
+		certBody, certOK := cert["certificate"].([]any)
+		keyBody, keyOK := cert["key"].([]any)
+		if certOK && keyOK && hasNonEmptyString(certBody) && hasNonEmptyString(keyBody) {
+			return nil
+		}
+	}
+	return fmt.Errorf("inbound %d (%s) uses TLS but all certificate entries are empty", id, remark)
+}
+
+func hasNonEmptyString(values []any) bool {
+	for _, value := range values {
+		if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *XrayService) syncHysteriaRuntimeAuth(inbound *model.Inbound, clients []any) {
