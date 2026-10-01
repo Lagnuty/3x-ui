@@ -2,6 +2,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
@@ -104,10 +105,41 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 		Port:           i.Port,
 		Protocol:       string(i.Protocol),
 		Settings:       json_util.RawMessage(i.Settings),
-		StreamSettings: json_util.RawMessage(i.StreamSettings),
+		StreamSettings: json_util.RawMessage(normalizeStreamSettings(i.StreamSettings)),
 		Tag:            i.Tag,
 		Sniffing:       json_util.RawMessage(i.Sniffing),
 	}
+}
+
+func normalizeStreamSettings(streamSettings string) string {
+	var stream map[string]any
+	if err := json.Unmarshal([]byte(streamSettings), &stream); err != nil {
+		return streamSettings
+	}
+
+	xhttp, ok := stream["xhttpSettings"].(map[string]any)
+	if !ok || xhttp == nil {
+		return streamSettings
+	}
+
+	if _, ok := xhttp["sessionIDPlacement"]; !ok {
+		if v, ok := xhttp["sessionPlacement"]; ok {
+			xhttp["sessionIDPlacement"] = v
+		}
+	}
+	if _, ok := xhttp["sessionIDKey"]; !ok {
+		if v, ok := xhttp["sessionKey"]; ok {
+			xhttp["sessionIDKey"] = v
+		}
+	}
+	delete(xhttp, "sessionPlacement")
+	delete(xhttp, "sessionKey")
+
+	normalized, err := json.Marshal(stream)
+	if err != nil {
+		return streamSettings
+	}
+	return string(normalized)
 }
 
 // Setting stores key-value configuration settings for the 3x-ui panel.

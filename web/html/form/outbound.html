@@ -543,6 +543,26 @@
           <a-form-item label="Min Upload Interval (Ms)" v-if="outbound.stream.xhttp.mode === 'packet-up'">
             <a-input v-model.trim="outbound.stream.xhttp.scMinPostsIntervalMs"></a-input>
           </a-form-item>
+          <a-form-item label="Session ID Placement">
+            <a-select v-model="outbound.stream.xhttp.sessionIDPlacement" :dropdown-class-name="themeSwitcher.currentTheme">
+              <a-select-option value>Default (path)</a-select-option>
+              <a-select-option value="path">path</a-select-option>
+              <a-select-option value="header">header</a-select-option>
+              <a-select-option value="cookie">cookie</a-select-option>
+              <a-select-option value="query">query</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="Session ID Key"
+            v-if="outbound.stream.xhttp.sessionIDPlacement && outbound.stream.xhttp.sessionIDPlacement !== 'path'">
+            <a-input v-model.trim="outbound.stream.xhttp.sessionIDKey" placeholder="x_session"></a-input>
+          </a-form-item>
+          <a-form-item label="Session ID Table">
+            <a-input v-model.trim="outbound.stream.xhttp.sessionIDTable" placeholder="optional lookup table"></a-input>
+          </a-form-item>
+          <a-form-item label="Session ID Length">
+            <a-input-number v-model.number="outbound.stream.xhttp.sessionIDLength" :min="0"
+              placeholder="0 (default)"></a-input-number>
+          </a-form-item>
           <a-form-item label="Max Concurrency" v-if="!outbound.stream.xhttp.xmux.maxConnections">
             <a-input v-model="outbound.stream.xhttp.xmux.maxConcurrency"></a-input>
           </a-form-item>
@@ -956,6 +976,9 @@
               <a-switch v-model="outbound.stream.finalmask.quicParams.hasUdpHop"></a-switch>
             </a-form-item>
             <template v-if="outbound.stream.finalmask.quicParams.hasUdpHop">
+              <a-alert v-if="outbound.stream.network === 'xhttp'" type="warning" show-icon
+                message="For XHTTP/3 on Xray v26.6.22+, keep udpHop and Sockopt dialerProxy aligned with the selected upstream path."
+                style="margin-bottom: 12px"></a-alert>
               <a-form-item label="Hop Ports">
                 <a-input v-model.trim="outbound.stream.finalmask.quicParams.udpHop.ports"
                   placeholder="e.g. 20000-50000" />

@@ -366,6 +366,9 @@
         <a-switch v-model="inbound.stream.finalmask.quicParams.hasUdpHop"></a-switch>
       </a-form-item>
       <template v-if="inbound.stream.finalmask.quicParams.hasUdpHop">
+        <a-alert v-if="inbound.stream.network == 'xhttp'" type="warning" show-icon
+          message="XHTTP/3 udpHop needs matching client support in Xray v26.6.22+; QUIC/UDP sessions may close differently than older cores."
+          style="margin-bottom: 12px"></a-alert>
         <a-form-item label="Hop Ports">
           <a-input v-model.trim="inbound.stream.finalmask.quicParams.udpHop.ports" placeholder="e.g. 20000-50000" />
         </a-form-item>

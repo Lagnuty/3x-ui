@@ -604,6 +604,14 @@ func applyXhttpPaddingObj(xhttp map[string]any, obj map[string]any) {
 			}
 		}
 	}
+	for _, field := range []string{"sessionIDPlacement", "sessionIDKey", "sessionIDTable"} {
+		if v, ok := xhttp[field].(string); ok && len(v) > 0 {
+			obj[field] = v
+		}
+	}
+	if v, ok := xhttp["sessionIDLength"]; ok && v != nil {
+		obj["sessionIDLength"] = v
+	}
 }
 
 func applyVmessNetworkParams(stream map[string]any, network string, obj map[string]any) {
@@ -972,6 +980,14 @@ func applyXhttpPaddingParams(xhttp map[string]any, params map[string]string) {
 				extra[field] = v
 			}
 		}
+	}
+	for _, field := range []string{"sessionIDPlacement", "sessionIDKey", "sessionIDTable"} {
+		if v, ok := xhttp[field].(string); ok && len(v) > 0 {
+			extra[field] = v
+		}
+	}
+	if v, ok := xhttp["sessionIDLength"]; ok && v != nil {
+		extra["sessionIDLength"] = v
 	}
 
 	if len(extra) > 0 {

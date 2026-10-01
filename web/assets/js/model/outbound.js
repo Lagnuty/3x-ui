@@ -357,6 +357,10 @@ class xHTTPStreamSettings extends CommonClass {
         mode = '',
         noGRPCHeader = false,
         scMinPostsIntervalMs = "30",
+        sessionIDPlacement = '',
+        sessionIDKey = '',
+        sessionIDTable = '',
+        sessionIDLength = '',
         xmux = {
             maxConcurrency: "16-32",
             maxConnections: 0,
@@ -372,6 +376,10 @@ class xHTTPStreamSettings extends CommonClass {
         this.mode = mode;
         this.noGRPCHeader = noGRPCHeader;
         this.scMinPostsIntervalMs = scMinPostsIntervalMs;
+        this.sessionIDPlacement = sessionIDPlacement;
+        this.sessionIDKey = sessionIDKey;
+        this.sessionIDTable = sessionIDTable;
+        this.sessionIDLength = sessionIDLength;
         this.xmux = xmux;
     }
 
@@ -382,6 +390,10 @@ class xHTTPStreamSettings extends CommonClass {
             json.mode,
             json.noGRPCHeader,
             json.scMinPostsIntervalMs,
+            json.sessionIDPlacement ?? json.sessionPlacement,
+            json.sessionIDKey ?? json.sessionKey,
+            json.sessionIDTable,
+            json.sessionIDLength,
             json.xmux
         );
     }
@@ -393,6 +405,10 @@ class xHTTPStreamSettings extends CommonClass {
             mode: this.mode,
             noGRPCHeader: this.noGRPCHeader,
             scMinPostsIntervalMs: this.scMinPostsIntervalMs,
+            sessionIDPlacement: this.sessionIDPlacement,
+            sessionIDKey: this.sessionIDKey,
+            sessionIDTable: this.sessionIDTable,
+            sessionIDLength: this.sessionIDLength,
             xmux: {
                 maxConcurrency: this.xmux.maxConcurrency,
                 maxConnections: this.xmux.maxConnections,
@@ -1227,6 +1243,10 @@ class Outbound extends CommonClass {
             // explicitly to avoid that.
             const xh = new xHTTPStreamSettings(json.path, json.host);
             if (json.mode) xh.mode = json.mode;
+            if (json.sessionIDPlacement || json.sessionPlacement) xh.sessionIDPlacement = json.sessionIDPlacement ?? json.sessionPlacement;
+            if (json.sessionIDKey || json.sessionKey) xh.sessionIDKey = json.sessionIDKey ?? json.sessionKey;
+            if (json.sessionIDTable) xh.sessionIDTable = json.sessionIDTable;
+            if (json.sessionIDLength) xh.sessionIDLength = json.sessionIDLength;
             stream.xhttp = xh;
         }
 
@@ -1290,6 +1310,12 @@ class Outbound extends CommonClass {
                     ["xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod"].forEach(k => {
                         if (typeof extra[k] === 'string' && extra[k]) xh[k] = extra[k];
                     });
+                    ["sessionIDPlacement", "sessionIDKey", "sessionIDTable"].forEach(k => {
+                        if (typeof extra[k] === 'string' && extra[k]) xh[k] = extra[k];
+                    });
+                    if (extra.sessionIDLength) xh.sessionIDLength = extra.sessionIDLength;
+                    if (typeof extra.sessionPlacement === 'string' && extra.sessionPlacement) xh.sessionIDPlacement = extra.sessionPlacement;
+                    if (typeof extra.sessionKey === 'string' && extra.sessionKey) xh.sessionIDKey = extra.sessionKey;
                 } catch (_) { /* ignore malformed extra */ }
             }
             stream.xhttp = xh;

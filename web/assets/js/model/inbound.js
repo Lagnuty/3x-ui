@@ -489,8 +489,10 @@ class xHTTPStreamSettings extends XrayCommonClass {
         xPaddingPlacement = '',
         xPaddingMethod = '',
         uplinkHTTPMethod = '',
-        sessionPlacement = '',
-        sessionKey = '',
+        sessionIDPlacement = '',
+        sessionIDKey = '',
+        sessionIDTable = '',
+        sessionIDLength = '',
         seqPlacement = '',
         seqKey = '',
         uplinkDataPlacement = '',
@@ -513,8 +515,10 @@ class xHTTPStreamSettings extends XrayCommonClass {
         this.xPaddingPlacement = xPaddingPlacement;
         this.xPaddingMethod = xPaddingMethod;
         this.uplinkHTTPMethod = uplinkHTTPMethod;
-        this.sessionPlacement = sessionPlacement;
-        this.sessionKey = sessionKey;
+        this.sessionIDPlacement = sessionIDPlacement;
+        this.sessionIDKey = sessionIDKey;
+        this.sessionIDTable = sessionIDTable;
+        this.sessionIDLength = sessionIDLength;
         this.seqPlacement = seqPlacement;
         this.seqKey = seqKey;
         this.uplinkDataPlacement = uplinkDataPlacement;
@@ -547,8 +551,10 @@ class xHTTPStreamSettings extends XrayCommonClass {
             json.xPaddingPlacement,
             json.xPaddingMethod,
             json.uplinkHTTPMethod,
-            json.sessionPlacement,
-            json.sessionKey,
+            json.sessionIDPlacement ?? json.sessionPlacement,
+            json.sessionIDKey ?? json.sessionKey,
+            json.sessionIDTable,
+            json.sessionIDLength,
             json.seqPlacement,
             json.seqKey,
             json.uplinkDataPlacement,
@@ -574,8 +580,10 @@ class xHTTPStreamSettings extends XrayCommonClass {
             xPaddingPlacement: this.xPaddingPlacement,
             xPaddingMethod: this.xPaddingMethod,
             uplinkHTTPMethod: this.uplinkHTTPMethod,
-            sessionPlacement: this.sessionPlacement,
-            sessionKey: this.sessionKey,
+            sessionIDPlacement: this.sessionIDPlacement,
+            sessionIDKey: this.sessionIDKey,
+            sessionIDTable: this.sessionIDTable,
+            sessionIDLength: this.sessionIDLength,
             seqPlacement: this.seqPlacement,
             seqKey: this.seqKey,
             uplinkDataPlacement: this.uplinkDataPlacement,
@@ -1554,6 +1562,14 @@ class Inbound extends XrayCommonClass {
                 }
             });
         }
+        ["sessionIDPlacement", "sessionIDKey", "sessionIDTable"].forEach(k => {
+            if (typeof xhttp[k] === 'string' && xhttp[k].length > 0) {
+                extra[k] = xhttp[k];
+            }
+        });
+        if (xhttp.sessionIDLength) {
+            extra.sessionIDLength = xhttp.sessionIDLength;
+        }
         if (Object.keys(extra).length > 0) {
             params.set("extra", JSON.stringify(extra));
         }
@@ -1574,6 +1590,14 @@ class Inbound extends XrayCommonClass {
                     obj[k] = xhttp[k];
                 }
             });
+        }
+        ["sessionIDPlacement", "sessionIDKey", "sessionIDTable"].forEach(k => {
+            if (typeof xhttp[k] === 'string' && xhttp[k].length > 0) {
+                obj[k] = xhttp[k];
+            }
+        });
+        if (xhttp.sessionIDLength) {
+            obj.sessionIDLength = xhttp.sessionIDLength;
         }
     }
 

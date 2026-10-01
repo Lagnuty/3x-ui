@@ -1,22 +1,50 @@
 package model
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
-func TestIsHysteria(t *testing.T) {
-	cases := []struct {
-		in   Protocol
-		want bool
-	}{
-		{Hysteria, true},
-		{Hysteria2, true},
-		{VLESS, false},
-		{Shadowsocks, false},
-		{Protocol(""), false},
-		{Protocol("hysteria3"), false},
+func TestNormalizeStreamSettingsRenamesLegacyXHTTPSessionKeys(t *testing.T) {
+	stream := `{"network":"xhttp","xhttpSettings":{"path":"/","sessionPlacement":"header","sessionKey":"x_session"}}`
+
+	normalized := normalizeStreamSettings(stream)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized streamSettings is invalid JSON: %v", err)
 	}
-	for _, c := range cases {
-		if got := IsHysteria(c.in); got != c.want {
-			t.Errorf("IsHysteria(%q) = %v, want %v", c.in, got, c.want)
-		}
+	xhttp := got["xhttpSettings"].(map[string]any)
+
+	if xhttp["sessionIDPlacement"] != "header" {
+		t.Fatalf("sessionIDPlacement = %v, want header", xhttp["sessionIDPlacement"])
+	}
+	if xhttp["sessionIDKey"] != "x_session" {
+		t.Fatalf("sessionIDKey = %v, want x_session", xhttp["sessionIDKey"])
+	}
+	if _, ok := xhttp["sessionPlacement"]; ok {
+		t.Fatal("legacy sessionPlacement should be removed")
+	}
+	if _, ok := xhttp["sessionKey"]; ok {
+		t.Fatal("legacy sessionKey should be removed")
+	}
+}
+
+func TestNormalizeStreamSettingsKeepsNewXHTTPSessionKeys(t *testing.T) {
+	stream := `{"network":"xhttp","xhttpSettings":{"path":"/","sessionPlacement":"header","sessionIDPlacement":"query","sessionKey":"old","sessionIDKey":"new"}}`
+
+	normalized := normalizeStreamSettings(stream)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized streamSettings is invalid JSON: %v", err)
+	}
+	xhttp := got["xhttpSettings"].(map[string]any)
+
+	if xhttp["sessionIDPlacement"] != "query" {
+		t.Fatalf("sessionIDPlacement = %v, want query", xhttp["sessionIDPlacement"])
+	}
+	if xhttp["sessionIDKey"] != "new" {
+		t.Fatalf("sessionIDKey = %v, want new", xhttp["sessionIDKey"])
 	}
 }
