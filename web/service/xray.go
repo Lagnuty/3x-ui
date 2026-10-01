@@ -102,6 +102,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	xrayConfig.OutboundConfigs = normalizeWireGuardOutbounds(xrayConfig.OutboundConfigs)
 
 	_, _, _ = s.inboundService.AddTraffic(nil, nil)
 
@@ -196,6 +197,49 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
 	return xrayConfig, nil
+}
+
+func normalizeWireGuardOutbounds(raw []byte) []byte {
+	if len(raw) == 0 {
+		return raw
+	}
+
+	var outbounds []any
+	if err := json.Unmarshal(raw, &outbounds); err != nil {
+		return raw
+	}
+
+	changed := false
+	for _, ob := range outbounds {
+		outbound, ok := ob.(map[string]any)
+		if !ok {
+			continue
+		}
+		if protocol, _ := outbound["protocol"].(string); protocol != "wireguard" {
+			continue
+		}
+		settings, ok := outbound["settings"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, ok := settings["workers"]; ok {
+			delete(settings, "workers")
+			changed = true
+		}
+		if _, ok := settings["num_workers"]; ok {
+			delete(settings, "num_workers")
+			changed = true
+		}
+	}
+
+	if !changed {
+		return raw
+	}
+	normalized, err := json.Marshal(outbounds)
+	if err != nil {
+		return raw
+	}
+	return normalized
 }
 
 // GetXrayTraffic fetches the current traffic statistics from the running Xray process.

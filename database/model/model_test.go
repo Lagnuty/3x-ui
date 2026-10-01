@@ -48,3 +48,23 @@ func TestNormalizeStreamSettingsKeepsNewXHTTPSessionKeys(t *testing.T) {
 		t.Fatalf("sessionIDKey = %v, want new", xhttp["sessionIDKey"])
 	}
 }
+
+func TestNormalizeInboundSettingsDropsWireGuardWorkers(t *testing.T) {
+	settings := `{"secretKey":"key","workers":2,"num_workers":4,"peers":[]}`
+
+	normalized := normalizeInboundSettings(WireGuard, settings)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized settings is invalid JSON: %v", err)
+	}
+	if _, ok := got["workers"]; ok {
+		t.Fatal("workers should be removed")
+	}
+	if _, ok := got["num_workers"]; ok {
+		t.Fatal("num_workers should be removed")
+	}
+	if got["secretKey"] != "key" {
+		t.Fatalf("secretKey = %v, want key", got["secretKey"])
+	}
+}

@@ -48,11 +48,28 @@
     <a-input-number v-model.number="inbound.settings.userLevel" :min="0" placeholder="0"></a-input-number>
   </a-form-item>
   <a-form-item label="Auto Routing Table">
+    <a-alert type="info" show-icon
+      message="Linux needs root or CAP_NET_ADMIN/CAP_NET_RAW for TUN and route updates; Windows needs Administrator privileges and a working TUN driver."
+      style="margin-bottom: 12px"></a-alert>
+    <a-space style="margin-bottom: 8px">
+      <a-button size="small"
+        @click="inbound.settings.autoSystemRoutingTable = ['auto']; inbound.settings.autoOutboundsInterface = 'auto'">
+        Auto
+      </a-button>
+      <a-button size="small"
+        @click="inbound.settings.autoSystemRoutingTable = ['main']; inbound.settings.autoOutboundsInterface = 'auto'">
+        Linux
+      </a-button>
+      <a-button size="small"
+        @click="inbound.settings.autoSystemRoutingTable = ['auto']; inbound.settings.autoOutboundsInterface = 'auto'">
+        Windows
+      </a-button>
+    </a-space>
     <a-select mode="tags" v-model="inbound.settings.autoSystemRoutingTable" :style="{ width: '100%' }"
-      :token-separators="[',']" placeholder="e.g. vpn, proxy"></a-select>
+      :token-separators="[',']" placeholder="auto, main, 100, vpn"></a-select>
   </a-form-item>
   <a-form-item label="Auto Outbounds">
-    <a-input v-model.trim="inbound.settings.autoOutboundsInterface" placeholder="auto"></a-input>
+    <a-input v-model.trim="inbound.settings.autoOutboundsInterface" placeholder="auto, eth0, ens3, Ethernet"></a-input>
   </a-form-item>
 </a-form>
 {{end}}

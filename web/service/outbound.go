@@ -280,6 +280,8 @@ func (s *OutboundService) createTestConfig(outboundTag string, allOutbounds []an
 			// Set noKernelTun to true for WireGuard outbounds
 			if settings, ok := outbound["settings"].(map[string]any); ok {
 				settings["noKernelTun"] = true
+				delete(settings, "workers")
+				delete(settings, "num_workers")
 			} else {
 				// Create settings if it doesn't exist
 				outbound["settings"] = map[string]any{

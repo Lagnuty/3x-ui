@@ -65,8 +65,22 @@
       <a-input v-model="inbound.stream.sockopt.interfaceName"></a-input>
     </a-form-item>
     <a-form-item label="Trusted X-Forwarded-For">
+      <a-alert v-if="['ws', 'httpupgrade', 'xhttp', 'grpc'].includes(inbound.stream.network)" type="info" show-icon
+        message="Real client IP behind CDN/relay: Xray v26.6.22+ also resolves gRPC client IP from trusted forwarded headers."
+        style="margin-bottom: 12px"></a-alert>
+      <a-space style="margin-bottom: 8px">
+        <a-button size="small"
+          @click="inbound.stream.sockopt.trustedXForwardedFor = ['CF-Connecting-IP', 'True-Client-IP', 'X-Forwarded-For']">
+          Cloudflare
+        </a-button>
+        <a-button size="small"
+          @click="inbound.stream.sockopt.trustedXForwardedFor = ['X-Forwarded-For', 'X-Real-IP']">
+          Reverse Proxy
+        </a-button>
+      </a-space>
       <a-select mode="tags" v-model="inbound.stream.sockopt.trustedXForwardedFor" :style="{ width: '100%' }"
         :dropdown-class-name="themeSwitcher.currentTheme">
+        <a-select-option value="X-Forwarded-For">X-Forwarded-For</a-select-option>
         <a-select-option value="CF-Connecting-IP">CF-Connecting-IP</a-select-option>
         <a-select-option value="X-Real-IP">X-Real-IP</a-select-option>
         <a-select-option value="True-Client-IP">True-Client-IP</a-select-option>

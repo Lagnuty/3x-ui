@@ -104,11 +104,31 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 		Listen:         json_util.RawMessage(listen),
 		Port:           i.Port,
 		Protocol:       string(i.Protocol),
-		Settings:       json_util.RawMessage(i.Settings),
+		Settings:       json_util.RawMessage(normalizeInboundSettings(i.Protocol, i.Settings)),
 		StreamSettings: json_util.RawMessage(normalizeStreamSettings(i.StreamSettings)),
 		Tag:            i.Tag,
 		Sniffing:       json_util.RawMessage(i.Sniffing),
 	}
+}
+
+func normalizeInboundSettings(protocol Protocol, settings string) string {
+	if protocol != WireGuard {
+		return settings
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(settings), &cfg); err != nil {
+		return settings
+	}
+
+	delete(cfg, "workers")
+	delete(cfg, "num_workers")
+
+	normalized, err := json.Marshal(cfg)
+	if err != nil {
+		return settings
+	}
+	return string(normalized)
 }
 
 func normalizeStreamSettings(streamSettings string) string {
