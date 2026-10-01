@@ -472,6 +472,17 @@ class HTTPUpgradeStreamSettings extends XrayCommonClass {
     }
 }
 
+function xHTTPDefaultXmux() {
+    return {
+        maxConcurrency: "16-32",
+        maxConnections: 0,
+        cMaxReuseTimes: 0,
+        hMaxRequestTimes: "600-900",
+        hMaxReusableSecs: "1800-3000",
+        hKeepAlivePeriod: 0,
+    };
+}
+
 class xHTTPStreamSettings extends XrayCommonClass {
     constructor(
         path = '/',
@@ -498,6 +509,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
         uplinkDataPlacement = '',
         uplinkDataKey = '',
         uplinkChunkSize = 0,
+        xmux = undefined,
     ) {
         super();
         this.path = path;
@@ -524,6 +536,8 @@ class xHTTPStreamSettings extends XrayCommonClass {
         this.uplinkDataPlacement = uplinkDataPlacement;
         this.uplinkDataKey = uplinkDataKey;
         this.uplinkChunkSize = uplinkChunkSize;
+        this.enableXmux = xmux != null && Object.keys(xmux).length > 0;
+        this.xmux = this.enableXmux ? { ...xHTTPDefaultXmux(), ...xmux } : xHTTPDefaultXmux();
     }
 
     addHeader(name, value) {
@@ -560,6 +574,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
             json.uplinkDataPlacement,
             json.uplinkDataKey,
             json.uplinkChunkSize,
+            json.xmux,
         );
     }
 
@@ -589,6 +604,14 @@ class xHTTPStreamSettings extends XrayCommonClass {
             uplinkDataPlacement: this.uplinkDataPlacement,
             uplinkDataKey: this.uplinkDataKey,
             uplinkChunkSize: this.uplinkChunkSize,
+            xmux: this.enableXmux ? {
+                maxConcurrency: this.xmux.maxConcurrency,
+                maxConnections: this.xmux.maxConnections,
+                cMaxReuseTimes: this.xmux.cMaxReuseTimes,
+                hMaxRequestTimes: this.xmux.hMaxRequestTimes,
+                hMaxReusableSecs: this.xmux.hMaxReusableSecs,
+                hKeepAlivePeriod: this.xmux.hKeepAlivePeriod,
+            } : undefined,
         };
     }
 }
@@ -1075,6 +1098,8 @@ class UdpMask extends XrayCommonClass {
             case 'salamander':
             case 'mkcp-aes128gcm':
                 return { password: settings.password || '' };
+            case 'mkcp-legacy':
+                return { header: settings.header ?? '', value: settings.value ?? '' };
             case 'header-dns':
                 return { domain: settings.domain || '' };
             case 'xdns':
@@ -1582,6 +1607,17 @@ class Inbound extends XrayCommonClass {
         if (xhttp.sessionIDLength) {
             extra.sessionIDLength = xhttp.sessionIDLength;
         }
+        ["seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "uplinkHTTPMethod"].forEach(k => {
+            if (typeof xhttp[k] === 'string' && xhttp[k].length > 0) {
+                extra[k] = xhttp[k];
+            }
+        });
+        if (xhttp.uplinkChunkSize) {
+            extra.uplinkChunkSize = xhttp.uplinkChunkSize;
+        }
+        if (xhttp.enableXmux && xhttp.xmux) {
+            extra.xmux = xhttp.xmux;
+        }
         if (Object.keys(extra).length > 0) {
             params.set("extra", JSON.stringify(extra));
         }
@@ -1610,6 +1646,17 @@ class Inbound extends XrayCommonClass {
         });
         if (xhttp.sessionIDLength) {
             obj.sessionIDLength = xhttp.sessionIDLength;
+        }
+        ["seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "uplinkHTTPMethod"].forEach(k => {
+            if (typeof xhttp[k] === 'string' && xhttp[k].length > 0) {
+                obj[k] = xhttp[k];
+            }
+        });
+        if (xhttp.uplinkChunkSize) {
+            obj.uplinkChunkSize = xhttp.uplinkChunkSize;
+        }
+        if (xhttp.enableXmux && xhttp.xmux) {
+            obj.xmux = xhttp.xmux;
         }
     }
 

@@ -125,7 +125,7 @@
 "restartXray" = "Перезапустить"
 "xraySwitch" = "Выбор версии"
 "xraySwitchClick" = "Выберите нужную версию"
-"xraySwitchClickDesk" = "Важно: старые версии могут не поддерживать текущие настройки"
+"xraySwitchClickDesk" = "Важно: разные версии Xray могут менять дефолты XHTTP/XMUX и совместимость FinalMask."
 "xrayUpdates" = "Обновления Xray"
 "updatePanel" = "Обновить панель"
 "panelUpdateDesc" = "Это обновит 3X-UI до последнего релиза и перезапустит сервис панели."

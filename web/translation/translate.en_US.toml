@@ -126,7 +126,7 @@
 "xraySwitch" = "Version"
 "xrayUpdates" = "Xray Updates"
 "xraySwitchClick" = "Choose the version you want to switch to."
-"xraySwitchClickDesk" = "Choose carefully, as older versions may not be compatible with current configurations."
+"xraySwitchClickDesk" = "Choose carefully: older/newer Xray cores may change XHTTP/XMUX defaults and FinalMask compatibility."
 "updatePanel" = "Update Panel"
 "panelUpdateDesc" = "This will update 3X-UI itself to the latest release and restart the panel service."
 "currentPanelVersion" = "Current panel version"

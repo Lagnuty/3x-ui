@@ -591,28 +591,13 @@ func applyShareNetworkParams(stream map[string]any, streamNetwork string, params
 }
 
 func applyXhttpPaddingObj(xhttp map[string]any, obj map[string]any) {
-	// VMess base64 JSON supports arbitrary keys; copy the padding
-	// settings through so clients can match the server's xhttp
-	// xPaddingBytes range and, when the admin opted into obfs
-	// mode, the custom key / header / placement / method.
 	if xpb, ok := xhttp["xPaddingBytes"].(string); ok && len(xpb) > 0 {
 		obj["x_padding_bytes"] = xpb
 	}
-	if obfs, ok := xhttp["xPaddingObfsMode"].(bool); ok && obfs {
-		obj["xPaddingObfsMode"] = true
-		for _, field := range []string{"xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod"} {
-			if v, ok := xhttp[field].(string); ok && len(v) > 0 {
-				obj[field] = v
-			}
+	if extra := buildXhttpExtra(xhttp); extra != nil {
+		for key, value := range extra {
+			obj[key] = value
 		}
-	}
-	for _, field := range []string{"sessionIDPlacement", "sessionIDKey", "sessionIDTable"} {
-		if v, ok := xhttp[field].(string); ok && len(v) > 0 {
-			obj[field] = v
-		}
-	}
-	if v, ok := xhttp["sessionIDLength"]; ok && v != nil {
-		obj["sessionIDLength"] = v
 	}
 }
 
@@ -674,6 +659,16 @@ func applyShareTLSParams(stream map[string]any, params map[string]string) {
 		if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
 			params["fp"], _ = fpValue.(string)
 		}
+		if vcnValue, ok := searchKey(tlsSetting, "verifyPeerCertByName"); ok {
+			if v, _ := vcnValue.(string); v != "" {
+				params["vcn"] = v
+			}
+		}
+		if pcsValue, ok := searchKey(tlsSetting, "pinnedPeerCertSha256"); ok {
+			if pins := joinAnyStrings(pcsValue); pins != "" {
+				params["pcs"] = pins
+			}
+		}
 	}
 }
 
@@ -695,6 +690,16 @@ func applyVmessTLSParams(stream map[string]any, obj map[string]any) {
 	if tlsSetting != nil {
 		if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
 			obj["fp"], _ = fpValue.(string)
+		}
+		if vcnValue, ok := searchKey(tlsSetting, "verifyPeerCertByName"); ok {
+			if v, _ := vcnValue.(string); v != "" {
+				obj["vcn"] = v
+			}
+		}
+		if pcsValue, ok := searchKey(tlsSetting, "pinnedPeerCertSha256"); ok {
+			if pins := joinAnyStrings(pcsValue); pins != "" {
+				obj["pcs"] = pins
+			}
 		}
 	}
 }
@@ -968,38 +973,104 @@ func applyXhttpPaddingParams(xhttp map[string]any, params map[string]string) {
 		params["x_padding_bytes"] = xpb
 	}
 
-	extra := map[string]any{}
-	if xpb, ok := xhttp["xPaddingBytes"].(string); ok && len(xpb) > 0 {
-		extra["xPaddingBytes"] = xpb
-	}
-	if obfs, ok := xhttp["xPaddingObfsMode"].(bool); ok && obfs {
-		extra["xPaddingObfsMode"] = true
-		// The obfs-mode-only fields: only populate the ones the admin
-		// actually set, so xray-core falls back to its own defaults for
-		// the rest instead of seeing spurious empty strings.
-		for _, field := range []string{"xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod"} {
-			if v, ok := xhttp[field].(string); ok && len(v) > 0 {
-				extra[field] = v
-			}
-		}
-	}
-	for _, field := range []string{"sessionIDPlacement", "sessionIDKey", "sessionIDTable"} {
-		if v, ok := xhttp[field].(string); ok && len(v) > 0 {
-			extra[field] = v
-		}
-	}
-	if v, ok := xhttp["sessionIDLength"]; ok && v != nil {
-		extra["sessionIDLength"] = v
-	}
-
-	if len(extra) > 0 {
+	if extra := buildXhttpExtra(xhttp); extra != nil {
 		if b, err := json.Marshal(extra); err == nil {
 			params["extra"] = string(b)
 		}
 	}
 }
 
+func buildXhttpExtra(xhttp map[string]any) map[string]any {
+	extra := map[string]any{}
+	if xpb, ok := xhttp["xPaddingBytes"].(string); ok && len(xpb) > 0 {
+		extra["xPaddingBytes"] = xpb
+	}
+	if obfs, ok := xhttp["xPaddingObfsMode"].(bool); ok && obfs {
+		extra["xPaddingObfsMode"] = true
+		for _, field := range []string{"xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod"} {
+			if v, ok := xhttp[field].(string); ok && len(v) > 0 {
+				extra[field] = v
+			}
+		}
+	}
+	for _, field := range []string{"sessionIDPlacement", "sessionIDKey", "sessionIDTable", "seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "uplinkHTTPMethod"} {
+		if v, ok := xhttp[field].(string); ok && len(v) > 0 {
+			extra[field] = v
+		}
+	}
+
+	for _, field := range []string{"scMaxEachPostBytes", "scMinPostsIntervalMs"} {
+		if v, ok := xhttp[field].(string); ok && len(v) > 0 && v != xhttpShareDefault(field) {
+			extra[field] = v
+		}
+	}
+	for _, field := range []string{"sessionIDLength", "uplinkChunkSize"} {
+		if v, ok := nonZeroShareValue(xhttp[field]); ok {
+			extra[field] = v
+		}
+	}
+	if v, ok := xhttp["noGRPCHeader"].(bool); ok && v {
+		extra["noGRPCHeader"] = v
+	}
+	for _, field := range []string{"xmux", "downloadSettings"} {
+		if v, ok := nonEmptyShareObject(xhttp[field]); ok {
+			extra[field] = v
+		}
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	return extra
+}
+
+func xhttpShareDefault(field string) string {
+	switch field {
+	case "scMaxEachPostBytes":
+		return "1000000"
+	case "scMinPostsIntervalMs":
+		return "30"
+	default:
+		return ""
+	}
+}
+
+func nonZeroShareValue(v any) (any, bool) {
+	switch value := v.(type) {
+	case string:
+		return value, value != ""
+	case int:
+		return value, value != 0
+	case int32:
+		return value, value != 0
+	case int64:
+		return value, value != 0
+	case float32:
+		return value, value != 0
+	case float64:
+		return value, value != 0
+	default:
+		return nil, false
+	}
+}
+
+func nonEmptyShareObject(v any) (any, bool) {
+	switch value := v.(type) {
+	case map[string]any:
+		return value, len(value) > 0
+	case []any:
+		return value, len(value) > 0
+	default:
+		return nil, false
+	}
+}
+
 var kcpMaskToHeaderType = map[string]string{
+	"dns":              "dns",
+	"dtls":             "dtls",
+	"srtp":             "srtp",
+	"utp":              "utp",
+	"wechat":           "wechat-video",
+	"wireguard":        "wireguard",
 	"header-dns":       "dns",
 	"header-dtls":      "dtls",
 	"header-srtp":      "srtp",
@@ -1010,7 +1081,14 @@ var kcpMaskToHeaderType = map[string]string{
 
 var validFinalMaskUDPTypes = map[string]struct{}{
 	"salamander":       {},
+	"mkcp-legacy":      {},
 	"mkcp-aes128gcm":   {},
+	"dns":              {},
+	"dtls":             {},
+	"srtp":             {},
+	"utp":              {},
+	"wechat":           {},
+	"wireguard":        {},
 	"header-dns":       {},
 	"header-dtls":      {},
 	"header-srtp":      {},
@@ -1179,6 +1257,14 @@ func extractKcpShareFields(stream map[string]any) kcpShareFields {
 		}
 
 		switch maskType {
+		case "mkcp-legacy":
+			settings, _ := mask["settings"].(map[string]any)
+			if header, _ := settings["header"].(string); header != "" {
+				if mapped, ok := kcpMaskToHeaderType[header]; ok {
+					fields.headerType = mapped
+				}
+			}
+			fields.seed, _ = settings["value"].(string)
 		case "mkcp-original":
 			fields.seed = ""
 		case "mkcp-aes128gcm":
@@ -1242,6 +1328,31 @@ func setIntField(obj map[string]any, key string, value int) {
 		return
 	}
 	obj[key] = value
+}
+
+func joinAnyStrings(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if item = strings.TrimSpace(item); item != "" {
+				out = append(out, item)
+			}
+		}
+		return strings.Join(out, ",")
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s := strings.TrimSpace(fmt.Sprint(item)); s != "" {
+				out = append(out, s)
+			}
+		}
+		return strings.Join(out, ",")
+	default:
+		return ""
+	}
 }
 
 // applyFinalMaskParams exports the finalmask payload as the compact

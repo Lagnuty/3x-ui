@@ -104,3 +104,35 @@ func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
 		t.Fatalf("xmc settings = %#v, want complete settings preserved", settings)
 	}
 }
+
+func TestNormalizeStreamSettingsDropsXHTTPCoreDependentDefaults(t *testing.T) {
+	stream := `{"network":"xhttp","xhttpSettings":{"path":"/","scMinPostsIntervalMs":"30","scMaxEachPostBytes":"1000000","xmux":{"maxConcurrency":"16-32","maxConnections":0,"cMaxReuseTimes":0,"hMaxRequestTimes":"600-900","hMaxReusableSecs":"1800-3000","hKeepAlivePeriod":0}}}`
+
+	normalized := normalizeStreamSettings(stream)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized streamSettings is invalid JSON: %v", err)
+	}
+	xhttp := got["xhttpSettings"].(map[string]any)
+	for _, key := range []string{"scMinPostsIntervalMs", "scMaxEachPostBytes", "xmux"} {
+		if _, ok := xhttp[key]; ok {
+			t.Fatalf("%s should be removed from old XHTTP defaults: %#v", key, xhttp)
+		}
+	}
+}
+
+func TestNormalizeStreamSettingsKeepsCustomXHTTPXMUX(t *testing.T) {
+	stream := `{"network":"xhttp","xhttpSettings":{"path":"/","xmux":{"maxConcurrency":"8-12","maxConnections":0,"cMaxReuseTimes":0,"hMaxRequestTimes":"600-900","hMaxReusableSecs":"1800-3000","hKeepAlivePeriod":0}}}`
+
+	normalized := normalizeStreamSettings(stream)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized streamSettings is invalid JSON: %v", err)
+	}
+	xmux := got["xhttpSettings"].(map[string]any)["xmux"].(map[string]any)
+	if xmux["maxConcurrency"] != "8-12" {
+		t.Fatalf("maxConcurrency = %v, want 8-12", xmux["maxConcurrency"])
+	}
+}

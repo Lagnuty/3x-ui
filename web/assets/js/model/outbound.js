@@ -350,25 +350,29 @@ class HttpUpgradeStreamSettings extends CommonClass {
     }
 }
 
+function xHTTPDefaultXmux() {
+    return {
+        maxConcurrency: "16-32",
+        maxConnections: 0,
+        cMaxReuseTimes: 0,
+        hMaxRequestTimes: "600-900",
+        hMaxReusableSecs: "1800-3000",
+        hKeepAlivePeriod: 0,
+    };
+}
+
 class xHTTPStreamSettings extends CommonClass {
     constructor(
         path = '/',
         host = '',
         mode = '',
         noGRPCHeader = false,
-        scMinPostsIntervalMs = "30",
+        scMinPostsIntervalMs = "",
         sessionIDPlacement = '',
         sessionIDKey = '',
         sessionIDTable = '',
         sessionIDLength = '',
-        xmux = {
-            maxConcurrency: "16-32",
-            maxConnections: 0,
-            cMaxReuseTimes: 0,
-            hMaxRequestTimes: "600-900",
-            hMaxReusableSecs: "1800-3000",
-            hKeepAlivePeriod: 0,
-        },
+        xmux = undefined,
     ) {
         super();
         this.path = path;
@@ -380,7 +384,8 @@ class xHTTPStreamSettings extends CommonClass {
         this.sessionIDKey = sessionIDKey;
         this.sessionIDTable = sessionIDTable;
         this.sessionIDLength = sessionIDLength;
-        this.xmux = xmux;
+        this.enableXmux = xmux != null && Object.keys(xmux).length > 0;
+        this.xmux = this.enableXmux ? { ...xHTTPDefaultXmux(), ...xmux } : xHTTPDefaultXmux();
     }
 
     static fromJson(json = {}) {
@@ -409,14 +414,14 @@ class xHTTPStreamSettings extends CommonClass {
             sessionIDKey: this.sessionIDKey,
             sessionIDTable: this.sessionIDTable,
             sessionIDLength: this.sessionIDLength,
-            xmux: {
+            xmux: this.enableXmux ? {
                 maxConcurrency: this.xmux.maxConcurrency,
                 maxConnections: this.xmux.maxConnections,
                 cMaxReuseTimes: this.xmux.cMaxReuseTimes,
                 hMaxRequestTimes: this.xmux.hMaxRequestTimes,
                 hMaxReusableSecs: this.xmux.hMaxReusableSecs,
                 hKeepAlivePeriod: this.xmux.hKeepAlivePeriod,
-            },
+            } : undefined,
         };
     }
 }
@@ -657,6 +662,8 @@ class UdpMask extends CommonClass {
             case 'salamander':
             case 'mkcp-aes128gcm':
                 return { password: settings.password || '' };
+            case 'mkcp-legacy':
+                return { header: settings.header ?? '', value: settings.value ?? '' };
             case 'header-dns':
                 return { domain: settings.domain || '' };
             case 'xdns':
@@ -1266,7 +1273,17 @@ class Outbound extends CommonClass {
             stream.tls = new TlsStreamSettings(
                 json.sni,
                 json.alpn ? json.alpn.split(',') : [],
-                json.fp);
+                json.fp,
+                json.ech ?? '',
+                json.vcn ?? '',
+                json.pcs ?? '');
+        }
+
+        if (json.fm) {
+            try {
+                const parsed = typeof json.fm === 'string' ? JSON.parse(json.fm) : json.fm;
+                stream.finalmask = FinalMaskStreamSettings.fromJson(parsed);
+            } catch (_) { /* ignore malformed finalmask */ }
         }
 
         const port = json.port * 1;
@@ -1325,7 +1342,15 @@ class Outbound extends CommonClass {
                     ["sessionIDPlacement", "sessionIDKey", "sessionIDTable"].forEach(k => {
                         if (typeof extra[k] === 'string' && extra[k]) xh[k] = extra[k];
                     });
+                    ["seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "uplinkHTTPMethod", "scMinPostsIntervalMs"].forEach(k => {
+                        if (typeof extra[k] === 'string' && extra[k]) xh[k] = extra[k];
+                    });
                     if (extra.sessionIDLength) xh.sessionIDLength = extra.sessionIDLength;
+                    if (extra.uplinkChunkSize) xh.uplinkChunkSize = extra.uplinkChunkSize;
+                    if (extra.xmux && typeof extra.xmux === 'object') {
+                        xh.enableXmux = true;
+                        xh.xmux = { ...xHTTPDefaultXmux(), ...extra.xmux };
+                    }
                     if (typeof extra.sessionPlacement === 'string' && extra.sessionPlacement) xh.sessionIDPlacement = extra.sessionPlacement;
                     if (typeof extra.sessionKey === 'string' && extra.sessionKey) xh.sessionIDKey = extra.sessionKey;
                 } catch (_) { /* ignore malformed extra */ }
@@ -1338,7 +1363,16 @@ class Outbound extends CommonClass {
             let alpn = url.searchParams.get('alpn');
             let sni = url.searchParams.get('sni') ?? '';
             let ech = url.searchParams.get('ech') ?? '';
-            stream.tls = new TlsStreamSettings(sni, alpn ? alpn.split(',') : [], fp, ech);
+            let vcn = url.searchParams.get('vcn') ?? '';
+            let pcs = url.searchParams.get('pcs') ?? '';
+            stream.tls = new TlsStreamSettings(sni, alpn ? alpn.split(',') : [], fp, ech, vcn, pcs);
+        }
+
+        const fm = url.searchParams.get('fm');
+        if (fm) {
+            try {
+                stream.finalmask = FinalMaskStreamSettings.fromJson(JSON.parse(fm));
+            } catch (_) { /* ignore malformed finalmask */ }
         }
 
         if (security == 'reality') {

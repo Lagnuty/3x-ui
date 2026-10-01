@@ -158,6 +158,9 @@ func normalizeStreamSettings(streamSettings string) string {
 	if _, ok := xhttp["sessionKey"]; ok {
 		changed = true
 	}
+	if normalizeXHTTPCoreDefaults(xhttp) {
+		changed = true
+	}
 
 	if !changed {
 		return streamSettings
@@ -181,6 +184,49 @@ func normalizeStreamSettings(streamSettings string) string {
 		return streamSettings
 	}
 	return string(normalized)
+}
+
+func normalizeXHTTPCoreDefaults(xhttp map[string]any) bool {
+	changed := false
+	if v, ok := xhttp["scMinPostsIntervalMs"].(string); ok && strings.TrimSpace(v) == "30" {
+		delete(xhttp, "scMinPostsIntervalMs")
+		changed = true
+	}
+	if v, ok := xhttp["scMaxEachPostBytes"].(string); ok && strings.TrimSpace(v) == "1000000" {
+		delete(xhttp, "scMaxEachPostBytes")
+		changed = true
+	}
+
+	xmux, ok := xhttp["xmux"].(map[string]any)
+	if !ok || xmux == nil {
+		return changed
+	}
+	if isDefaultXHTTPXMUX(xmux) {
+		delete(xhttp, "xmux")
+		return true
+	}
+	return changed
+}
+
+func isDefaultXHTTPXMUX(xmux map[string]any) bool {
+	defaults := map[string]string{
+		"maxConcurrency":   "16-32",
+		"maxConnections":   "0",
+		"cMaxReuseTimes":   "0",
+		"hMaxRequestTimes": "600-900",
+		"hMaxReusableSecs": "1800-3000",
+		"hKeepAlivePeriod": "0",
+	}
+	for key, want := range defaults {
+		got := strings.TrimSpace(fmt.Sprint(xmux[key]))
+		if got == "" {
+			got = "0"
+		}
+		if got != want {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeFinalMaskStreamSettings(stream map[string]any) bool {

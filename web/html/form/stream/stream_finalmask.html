@@ -178,7 +178,7 @@
     </template>
   </template>
 
-  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.stream.network == 'kcp'">
+  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.protocol == Protocols.WIREGUARD || inbound.stream.network == 'kcp' || inbound.protocol == Protocols.SHADOWSOCKS">
     <a-form-item label="UDP Masks">
       <a-button icon="plus" type="primary" size="small"
         @click="inbound.stream.addUdpMask(inbound.protocol === Protocols.HYSTERIA ? 'salamander' : 'mkcp-aes128gcm')"></a-button>
@@ -200,6 +200,7 @@
             </template>
             <template v-else>
               <a-select-option value="mkcp-aes128gcm">mKCP AES-128-GCM</a-select-option>
+              <a-select-option value="mkcp-legacy">mKCP Legacy</a-select-option>
               <a-select-option value="header-dns">Header DNS</a-select-option>
               <a-select-option value="header-dtls">Header DTLS 1.2</a-select-option>
               <a-select-option value="header-srtp">Header SRTP</a-select-option>
@@ -217,6 +218,22 @@
         <a-form-item label="Password" v-if="['mkcp-aes128gcm', 'salamander'].includes(mask.type)">
           <a-input v-model.trim="mask.settings.password" placeholder="Obfuscation password"></a-input>
         </a-form-item>
+        <template v-if="mask.type === 'mkcp-legacy'">
+          <a-form-item label="Header">
+            <a-select v-model="mask.settings.header" :dropdown-class-name="themeSwitcher.currentTheme">
+              <a-select-option value>Original</a-select-option>
+              <a-select-option value="dns">DNS</a-select-option>
+              <a-select-option value="dtls">DTLS 1.2</a-select-option>
+              <a-select-option value="srtp">SRTP</a-select-option>
+              <a-select-option value="utp">uTP</a-select-option>
+              <a-select-option value="wechat">WeChat Video</a-select-option>
+              <a-select-option value="wireguard">WireGuard</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="Value">
+            <a-input v-model.trim="mask.settings.value" placeholder="optional seed/password/domain"></a-input>
+          </a-form-item>
+        </template>
         <a-form-item label="Domain" v-if="mask.type === 'header-dns'">
           <a-input v-model.trim="mask.settings.domain" placeholder="e.g., www.example.com"></a-input>
         </a-form-item>

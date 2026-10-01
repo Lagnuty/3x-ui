@@ -538,7 +538,7 @@
             <a-switch v-model="outbound.stream.xhttp.noGRPCHeader"></a-switch>
           </a-form-item>
           <a-form-item label="Min Upload Interval (Ms)" v-if="outbound.stream.xhttp.mode === 'packet-up'">
-            <a-input v-model.trim="outbound.stream.xhttp.scMinPostsIntervalMs"></a-input>
+            <a-input v-model.trim="outbound.stream.xhttp.scMinPostsIntervalMs" placeholder="core default; old panels used 30"></a-input>
           </a-form-item>
           <a-form-item label="Session ID Placement">
             <a-select v-model="outbound.stream.xhttp.sessionIDPlacement" :dropdown-class-name="themeSwitcher.currentTheme">
@@ -560,24 +560,32 @@
             <a-input-number v-model.number="outbound.stream.xhttp.sessionIDLength" :min="0"
               placeholder="0 (default)"></a-input-number>
           </a-form-item>
-          <a-form-item label="Max Concurrency" v-if="!outbound.stream.xhttp.xmux.maxConnections">
-            <a-input v-model="outbound.stream.xhttp.xmux.maxConcurrency"></a-input>
+          <a-form-item label="XMUX">
+            <a-switch v-model="outbound.stream.xhttp.enableXmux"></a-switch>
           </a-form-item>
-          <a-form-item label="Max Connections" v-if="!outbound.stream.xhttp.xmux.maxConcurrency">
-            <a-input v-model="outbound.stream.xhttp.xmux.maxConnections"></a-input>
-          </a-form-item>
-          <a-form-item label="Max Reuse Times">
-            <a-input v-model="outbound.stream.xhttp.xmux.cMaxReuseTimes"></a-input>
-          </a-form-item>
-          <a-form-item label="Max Request Times">
-            <a-input v-model="outbound.stream.xhttp.xmux.hMaxRequestTimes"></a-input>
-          </a-form-item>
-          <a-form-item label="Max Reusable Secs">
-            <a-input v-model="outbound.stream.xhttp.xmux.hMaxReusableSecs"></a-input>
-          </a-form-item>
-          <a-form-item label="Keep Alive Period">
-            <a-input-number v-model.number="outbound.stream.xhttp.xmux.hKeepAlivePeriod"></a-input-number>
-          </a-form-item>
+          <template v-if="outbound.stream.xhttp.enableXmux">
+            <a-alert type="warning" show-icon
+              message="Core-dependent defaults: Xray v26.7.28+ may use lower fallback concurrency (3 instead of older 6). Disable XMUX to let the core decide."
+              style="margin-bottom: 12px"></a-alert>
+            <a-form-item label="Max Concurrency">
+              <a-input v-model="outbound.stream.xhttp.xmux.maxConcurrency" placeholder="16-32"></a-input>
+            </a-form-item>
+            <a-form-item label="Max Connections">
+              <a-input v-model="outbound.stream.xhttp.xmux.maxConnections" placeholder="0"></a-input>
+            </a-form-item>
+            <a-form-item label="Max Reuse Times">
+              <a-input v-model="outbound.stream.xhttp.xmux.cMaxReuseTimes"></a-input>
+            </a-form-item>
+            <a-form-item label="Max Request Times">
+              <a-input v-model="outbound.stream.xhttp.xmux.hMaxRequestTimes" placeholder="600-900"></a-input>
+            </a-form-item>
+            <a-form-item label="Max Reusable Secs">
+              <a-input v-model="outbound.stream.xhttp.xmux.hMaxReusableSecs" placeholder="1800-3000"></a-input>
+            </a-form-item>
+            <a-form-item label="Keep Alive Period">
+              <a-input-number v-model.number="outbound.stream.xhttp.xmux.hKeepAlivePeriod" :min="0"></a-input-number>
+            </a-form-item>
+          </template>
         </template>
 
         <!-- hysteria -->
@@ -800,7 +808,7 @@
         </template>
 
         <a-form-item label="UDP Masks"
-          v-if="outbound.stream.network === 'kcp' || outbound.protocol === Protocols.Hysteria">
+          v-if="outbound.stream.network === 'kcp' || outbound.protocol === Protocols.Hysteria || outbound.protocol === Protocols.Wireguard || outbound.protocol === Protocols.Shadowsocks">
           <a-button icon="plus" type="primary" size="small"
             @click="outbound.stream.addUdpMask(outbound.protocol === Protocols.Hysteria ? 'salamander' : 'mkcp-aes128gcm')"></a-button>
         </a-form-item>
@@ -820,6 +828,7 @@
                   Salamander (Hysteria2)</a-select-option>
                 <template v-else>
                   <a-select-option value="mkcp-aes128gcm">mKCP AES-128-GCM</a-select-option>
+                  <a-select-option value="mkcp-legacy">mKCP Legacy</a-select-option>
                   <a-select-option value="header-dns">Header DNS</a-select-option>
                   <a-select-option value="header-dtls">Header DTLS 1.2</a-select-option>
                   <a-select-option value="header-srtp">Header SRTP</a-select-option>
@@ -837,6 +846,22 @@
             <a-form-item label="Password" v-if="['salamander', 'mkcp-aes128gcm'].includes(mask.type)">
               <a-input v-model.trim="mask.settings.password" placeholder="Obfuscation password"></a-input>
             </a-form-item>
+            <template v-if="mask.type === 'mkcp-legacy'">
+              <a-form-item label="Header">
+                <a-select v-model="mask.settings.header" :dropdown-class-name="themeSwitcher.currentTheme">
+                  <a-select-option value>Original</a-select-option>
+                  <a-select-option value="dns">DNS</a-select-option>
+                  <a-select-option value="dtls">DTLS 1.2</a-select-option>
+                  <a-select-option value="srtp">SRTP</a-select-option>
+                  <a-select-option value="utp">uTP</a-select-option>
+                  <a-select-option value="wechat">WeChat Video</a-select-option>
+                  <a-select-option value="wireguard">WireGuard</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="Value">
+                <a-input v-model.trim="mask.settings.value" placeholder="optional seed/password/domain"></a-input>
+              </a-form-item>
+            </template>
             <a-form-item label="Domain" v-if="mask.type === 'header-dns'">
               <a-input v-model.trim="mask.settings.domain" placeholder="e.g., www.example.com"></a-input>
             </a-form-item>

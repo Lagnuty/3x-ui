@@ -225,6 +225,11 @@ func (s *SubClashService) buildProxy(inbound *model.Inbound, client model.Client
 	if !s.applySecurity(proxy, security, stream) {
 		return nil
 	}
+	if finalmask, ok := stream["finalmask"].(map[string]any); ok {
+		if fm, ok := marshalFinalMask(finalmask); ok {
+			proxy["fm"] = fm
+		}
+	}
 
 	return proxy
 }
@@ -286,6 +291,9 @@ func (s *SubClashService) buildHysteriaProxy(inbound *model.Inbound, client mode
 	// Salamander obfs (Hysteria2). Read the same finalmask.udp[salamander]
 	// block the subscription link generator uses.
 	if finalmask, ok := rawStream["finalmask"].(map[string]any); ok {
+		if fm, ok := marshalFinalMask(finalmask); ok {
+			proxy["fm"] = fm
+		}
 		if udpMasks, ok := finalmask["udp"].([]any); ok {
 			for _, m := range udpMasks {
 				mask, _ := m.(map[string]any)
@@ -384,6 +392,12 @@ func (s *SubClashService) applySecurity(proxy map[string]any, security string, s
 			}
 			if fingerprint, ok := tlsSettings["fingerprint"].(string); ok && fingerprint != "" {
 				proxy["client-fingerprint"] = fingerprint
+			}
+			if verifyName, ok := tlsSettings["verifyPeerCertByName"].(string); ok && verifyName != "" {
+				proxy["vcn"] = verifyName
+			}
+			if pins := joinAnyStrings(tlsSettings["pinnedPeerCertSha256"]); pins != "" {
+				proxy["pcs"] = pins
 			}
 		}
 		return true

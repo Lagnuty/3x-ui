@@ -1,5 +1,8 @@
 {{define "form/streamXHTTP"}}
 <a-form :colon="false" :label-col="{ md: {span:8} }" :wrapper-col="{ md: {span:14} }">
+  <a-alert type="info" show-icon
+    message="Experimental: XHTTP padding and XMUX defaults depend on Xray core version; v26.7.28+ lowers fallback concurrency behavior."
+    style="margin-bottom: 12px"></a-alert>
   <a-form-item label='{{ i18n "host" }}'>
     <a-input v-model.trim="inbound.stream.xhttp.host"></a-input>
   </a-form-item>
@@ -126,6 +129,32 @@
     <a-input-number v-model.number="inbound.stream.xhttp.uplinkChunkSize" :min="0"
       placeholder="0 (unlimited)"></a-input-number>
   </a-form-item>
+  <a-form-item label="XMUX">
+    <a-switch v-model="inbound.stream.xhttp.enableXmux"></a-switch>
+  </a-form-item>
+  <template v-if="inbound.stream.xhttp.enableXmux">
+    <a-alert type="warning" show-icon
+      message="Core-dependent defaults: Xray v26.7.28+ may use lower fallback concurrency (3 instead of older 6). Leave XMUX disabled to let the core decide."
+      style="margin-bottom: 12px"></a-alert>
+    <a-form-item label="Max Concurrency">
+      <a-input v-model="inbound.stream.xhttp.xmux.maxConcurrency" placeholder="16-32"></a-input>
+    </a-form-item>
+    <a-form-item label="Max Connections">
+      <a-input v-model="inbound.stream.xhttp.xmux.maxConnections" placeholder="0"></a-input>
+    </a-form-item>
+    <a-form-item label="Max Reuse Times">
+      <a-input v-model="inbound.stream.xhttp.xmux.cMaxReuseTimes"></a-input>
+    </a-form-item>
+    <a-form-item label="Max Request Times">
+      <a-input v-model="inbound.stream.xhttp.xmux.hMaxRequestTimes" placeholder="600-900"></a-input>
+    </a-form-item>
+    <a-form-item label="Max Reusable Secs">
+      <a-input v-model="inbound.stream.xhttp.xmux.hMaxReusableSecs" placeholder="1800-3000"></a-input>
+    </a-form-item>
+    <a-form-item label="Keep Alive Period">
+      <a-input-number v-model.number="inbound.stream.xhttp.xmux.hKeepAlivePeriod" :min="0"></a-input-number>
+    </a-form-item>
+  </template>
   <a-form-item label="No SSE Header">
     <a-switch v-model="inbound.stream.xhttp.noSSEHeader"></a-switch>
   </a-form-item>
