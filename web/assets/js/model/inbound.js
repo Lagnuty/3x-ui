@@ -1170,6 +1170,12 @@ class TcpMask extends XrayCommonClass {
                     clients: Array.isArray(settings.clients) ? settings.clients : [],
                     servers: Array.isArray(settings.servers) ? settings.servers : [],
                 };
+            case 'xmc':
+                return {
+                    profile: settings.profile ?? '',
+                    texture: settings.texture ?? '',
+                    signature: settings.signature ?? '',
+                };
             default:
                 return settings;
         }
@@ -1202,6 +1208,11 @@ class TcpMask extends XrayCommonClass {
                 clients: Array.isArray(settings.clients) ? settings.clients.map(cleanGroup) : settings.clients,
                 servers: Array.isArray(settings.servers) ? settings.servers.map(cleanGroup) : settings.servers,
             };
+        } else if (this.type === 'xmc') {
+            const required = ['profile', 'texture', 'signature'];
+            if (!settings || required.some(key => ObjectUtil.isEmpty(settings[key]))) {
+                return undefined;
+            }
         }
 
         return {
@@ -1317,7 +1328,8 @@ class FinalMaskStreamSettings extends XrayCommonClass {
     toJson() {
         const result = {};
         if (this.tcp && this.tcp.length > 0) {
-            result.tcp = this.tcp.map(t => t.toJson());
+            const tcp = this.tcp.map(t => t.toJson()).filter(Boolean);
+            if (tcp.length > 0) result.tcp = tcp;
         }
         if (this.udp && this.udp.length > 0) {
             result.udp = this.udp.map(udp => udp.toJson());

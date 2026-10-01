@@ -302,6 +302,12 @@ func (s *SubClashService) buildHysteriaProxy(inbound *model.Inbound, client mode
 		}
 	}
 
+	if proxyType == "hysteria2" {
+		if route := s.SubService.vlessRouteForInbound(inbound.Tag); route != "" {
+			proxy["vless-route"] = route
+		}
+	}
+
 	return proxy
 }
 

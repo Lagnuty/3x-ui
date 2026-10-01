@@ -279,7 +279,7 @@ func (x *XrayAPI) GetTraffic(reset bool) ([]*Traffic, []*ClientTraffic, error) {
 		return nil, nil, common.NewError("xray api is not initialized")
 	}
 
-	trafficRegex := regexp.MustCompile(`(inbound|outbound)>>>([^>]+)>>>traffic>>>(downlink|uplink)`)
+	trafficRegex := regexp.MustCompile(`^(inbound|outbound)>>>([^>]+)(?:>>>([^>]+))?>>>traffic>>>(downlink|uplink)$`)
 	clientTrafficRegex := regexp.MustCompile(`user>>>([^>]+)>>>traffic>>>(downlink|uplink)`)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -299,7 +299,7 @@ func (x *XrayAPI) GetTraffic(reset bool) ([]*Traffic, []*ClientTraffic, error) {
 	emailTrafficMap := make(map[string]*ClientTraffic)
 
 	for _, stat := range resp.GetStat() {
-		if matches := trafficRegex.FindStringSubmatch(stat.Name); len(matches) == 4 {
+		if matches := trafficRegex.FindStringSubmatch(stat.Name); len(matches) == 5 {
 			processTraffic(matches, stat.Value, tagTrafficMap)
 		} else if matches := clientTrafficRegex.FindStringSubmatch(stat.Name); len(matches) == 3 {
 			processClientTraffic(matches, stat.Value, emailTrafficMap)
@@ -312,7 +312,7 @@ func (x *XrayAPI) GetTraffic(reset bool) ([]*Traffic, []*ClientTraffic, error) {
 func processTraffic(matches []string, value int64, trafficMap map[string]*Traffic) {
 	isInbound := matches[1] == "inbound"
 	tag := matches[2]
-	isDown := matches[3] == "downlink"
+	isDown := matches[4] == "downlink"
 
 	if tag == "api" {
 		return

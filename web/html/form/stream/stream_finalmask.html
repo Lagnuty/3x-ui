@@ -22,6 +22,7 @@
             <a-select-option value="fragment">Fragment</a-select-option>
             <a-select-option value="header-custom">Header Custom</a-select-option>
             <a-select-option value="sudoku">Sudoku</a-select-option>
+            <a-select-option value="xmc">XMC</a-select-option>
           </a-select>
         </a-form-item>
 
@@ -154,6 +155,23 @@
               </a-form-item>
             </template>
           </template>
+        </template>
+
+        <!-- XMC settings (TCP) -->
+        <template v-if="mask.type === 'xmc'">
+          <a-alert v-if="!mask.settings.profile || !mask.settings.texture || !mask.settings.signature"
+            type="warning" show-icon
+            message="XMC requires profile, texture, and signature; incomplete masks are removed before saving.">
+          </a-alert>
+          <a-form-item label="Profile">
+            <a-input v-model.trim="mask.settings.profile" placeholder="e.g. chrome" />
+          </a-form-item>
+          <a-form-item label="Texture">
+            <a-input v-model.trim="mask.settings.texture" placeholder="Texture payload" />
+          </a-form-item>
+          <a-form-item label="Signature">
+            <a-input v-model.trim="mask.settings.signature" placeholder="Signature payload" />
+          </a-form-item>
         </template>
 
       </a-form>

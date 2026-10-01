@@ -1,5 +1,11 @@
 {{define "form/streamHysteria"}}
 <a-form :colon="false" :label-col="{ md: {span:8} }" :wrapper-col="{ md: {span:14} }">
+  <a-alert v-if="inbound.settings.version == 2" type="info" show-icon
+    message="Hysteria2 VLESS Route is configured in Xray routing rules via vlessRoute + this inbound tag; share links and Mihomo subscriptions export it automatically.">
+  </a-alert>
+  <a-alert v-else type="warning" show-icon
+    message="VLESS Route is exported only for Hysteria2; Hysteria v1 subscriptions omit it for compatibility.">
+  </a-alert>
   <a-form-item label="UDP Idle Timeout">
     <a-input-number v-model.number="inbound.stream.hysteria.udpIdleTimeout" :min="0"></a-input-number>
   </a-form-item>

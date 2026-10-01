@@ -4,6 +4,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
 	"github.com/mhsanaei/3x-ui/v2/xray"
@@ -137,8 +138,28 @@ func normalizeStreamSettings(streamSettings string) string {
 		return streamSettings
 	}
 
+	changed := normalizeFinalMaskStreamSettings(stream)
+
 	xhttp, ok := stream["xhttpSettings"].(map[string]any)
 	if !ok || xhttp == nil {
+		if !changed {
+			return streamSettings
+		}
+		normalized, err := json.Marshal(stream)
+		if err != nil {
+			return streamSettings
+		}
+		return string(normalized)
+	}
+
+	if _, ok := xhttp["sessionPlacement"]; ok {
+		changed = true
+	}
+	if _, ok := xhttp["sessionKey"]; ok {
+		changed = true
+	}
+
+	if !changed {
 		return streamSettings
 	}
 
@@ -160,6 +181,60 @@ func normalizeStreamSettings(streamSettings string) string {
 		return streamSettings
 	}
 	return string(normalized)
+}
+
+func normalizeFinalMaskStreamSettings(stream map[string]any) bool {
+	finalmask, ok := stream["finalmask"].(map[string]any)
+	if !ok || finalmask == nil {
+		return false
+	}
+
+	rawTCP, hasTCP := finalmask["tcp"].([]any)
+	if !hasTCP {
+		return false
+	}
+
+	filteredTCP := make([]any, 0, len(rawTCP))
+	changed := false
+	for _, rawMask := range rawTCP {
+		mask, _ := rawMask.(map[string]any)
+		if mask == nil {
+			changed = true
+			continue
+		}
+		maskType, _ := mask["type"].(string)
+		if maskType == "xmc" && !hasCompleteFinalMaskXMCSettings(mask["settings"]) {
+			changed = true
+			continue
+		}
+		filteredTCP = append(filteredTCP, rawMask)
+	}
+
+	if !changed {
+		return false
+	}
+	if len(filteredTCP) > 0 {
+		finalmask["tcp"] = filteredTCP
+	} else {
+		delete(finalmask, "tcp")
+	}
+	if len(finalmask) == 0 {
+		delete(stream, "finalmask")
+	}
+	return true
+}
+
+func hasCompleteFinalMaskXMCSettings(value any) bool {
+	settings, _ := value.(map[string]any)
+	if settings == nil {
+		return false
+	}
+	for _, key := range []string{"profile", "texture", "signature"} {
+		if strings.TrimSpace(fmt.Sprint(settings[key])) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // Setting stores key-value configuration settings for the 3x-ui panel.

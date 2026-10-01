@@ -462,6 +462,8 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	protocol := "hysteria2"
 	if int(version) == 1 {
 		protocol = "hysteria"
+	} else if route := s.vlessRouteForInbound(inbound.Tag); route != "" {
+		params["vlessRoute"] = route
 	}
 
 	// Fan out one link per External Proxy entry if any. Previously this
@@ -1026,6 +1028,86 @@ var validFinalMaskTCPTypes = map[string]struct{}{
 	"header-custom": {},
 	"fragment":      {},
 	"sudoku":        {},
+	"xmc":           {},
+}
+
+func (s *SubService) vlessRouteForInbound(tag string) string {
+	if tag == "" {
+		return ""
+	}
+
+	template, err := s.settingService.GetXrayConfigTemplate()
+	if err != nil || template == "" {
+		return ""
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(template), &cfg); err != nil {
+		return ""
+	}
+	routing, _ := cfg["routing"].(map[string]any)
+	rules, _ := routing["rules"].([]any)
+	if len(rules) == 0 {
+		return ""
+	}
+
+	seen := map[string]struct{}{}
+	result := []string{}
+	for _, rawRule := range rules {
+		rule, _ := rawRule.(map[string]any)
+		if rule == nil || !ruleAppliesToInbound(rule["inboundTag"], tag) {
+			continue
+		}
+		for _, route := range csvAny(rule["vlessRoute"]) {
+			if _, ok := seen[route]; ok {
+				continue
+			}
+			seen[route] = struct{}{}
+			result = append(result, route)
+		}
+	}
+	return strings.Join(result, ",")
+}
+
+func ruleAppliesToInbound(value any, tag string) bool {
+	tags := csvAny(value)
+	if len(tags) == 0 {
+		return false
+	}
+	return slices.Contains(tags, tag)
+}
+
+func csvAny(value any) []string {
+	switch v := value.(type) {
+	case string:
+		return splitCSV(v)
+	case []any:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			result = append(result, splitCSV(fmt.Sprint(item))...)
+		}
+		return result
+	case []string:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			result = append(result, splitCSV(item)...)
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func splitCSV(value string) []string {
+	fields := strings.Split(value, ",")
+	result := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field != "" {
+			result = append(result, field)
+		}
+	}
+	return result
 }
 
 // applyKcpShareParams reconstructs legacy KCP share-link fields from either
@@ -1233,7 +1315,12 @@ func normalizedFinalMaskTCPMasks(value any) []any {
 
 		normalizedMask := map[string]any{"type": maskType}
 		if settings, ok := mask["settings"].(map[string]any); ok && len(settings) > 0 {
+			if maskType == "xmc" && !hasCompleteFinalMaskXMCSettings(settings) {
+				continue
+			}
 			normalizedMask["settings"] = settings
+		} else if maskType == "xmc" {
+			continue
 		}
 		normalized = append(normalized, normalizedMask)
 	}
@@ -1242,6 +1329,15 @@ func normalizedFinalMaskTCPMasks(value any) []any {
 		return nil
 	}
 	return normalized
+}
+
+func hasCompleteFinalMaskXMCSettings(settings map[string]any) bool {
+	for _, key := range []string{"profile", "texture", "signature"} {
+		if strings.TrimSpace(fmt.Sprint(settings[key])) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizedFinalMaskUDPMasks(value any) []any {

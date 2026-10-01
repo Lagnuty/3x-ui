@@ -68,3 +68,39 @@ func TestNormalizeInboundSettingsDropsWireGuardWorkers(t *testing.T) {
 		t.Fatalf("secretKey = %v, want key", got["secretKey"])
 	}
 }
+
+func TestNormalizeStreamSettingsDropsIncompleteFinalMaskXMC(t *testing.T) {
+	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"profile":"chrome","texture":"","signature":"sig"}},{"type":"fragment","settings":{"packets":"tlshello"}}]}}`
+
+	normalized := normalizeStreamSettings(stream)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized streamSettings is invalid JSON: %v", err)
+	}
+	finalmask := got["finalmask"].(map[string]any)
+	tcp := finalmask["tcp"].([]any)
+	if len(tcp) != 1 {
+		t.Fatalf("tcp masks len = %d, want 1", len(tcp))
+	}
+	mask := tcp[0].(map[string]any)
+	if mask["type"] != "fragment" {
+		t.Fatalf("remaining mask type = %v, want fragment", mask["type"])
+	}
+}
+
+func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
+	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"profile":"chrome","texture":"tex","signature":"sig"}}]}}`
+
+	normalized := normalizeStreamSettings(stream)
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatalf("normalized streamSettings is invalid JSON: %v", err)
+	}
+	tcp := got["finalmask"].(map[string]any)["tcp"].([]any)
+	settings := tcp[0].(map[string]any)["settings"].(map[string]any)
+	if settings["profile"] != "chrome" || settings["texture"] != "tex" || settings["signature"] != "sig" {
+		t.Fatalf("xmc settings = %#v, want complete settings preserved", settings)
+	}
+}

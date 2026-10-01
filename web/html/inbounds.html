@@ -284,6 +284,7 @@
                     <template slot="protocol" slot-scope="text, dbInbound">
                       <div class="protocol-tags">
                         <a-tag color="purple">[[ dbInbound.protocol ]]</a-tag>
+                        <a-tag v-if="dbInbound.isTun" color="cyan">TUN stats</a-tag>
                         <template
                           v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
                           <a-tag color="green">[[ dbInbound.toInbound().stream.network ]]</a-tag>
