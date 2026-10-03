@@ -18,14 +18,11 @@
         <template slot="title">
           <span>{{ i18n "pages.xray.tun.mtuDesc" }}</span>
         </template>
-        MTU IPv4
+        MTU
         <a-icon type="question-circle"></a-icon>
       </a-tooltip>
     </template>
-    <a-input-number v-model.number="inbound.settings.mtu[0]" :min="1" :max="9000" placeholder="1500"></a-input-number>
-  </a-form-item>
-  <a-form-item label="MTU IPv6">
-    <a-input-number v-model.number="inbound.settings.mtu[1]" :min="1" :max="9000" placeholder="1280"></a-input-number>
+    <a-input-number v-model.number="inbound.settings.mtu" :min="1" :max="9000" placeholder="1500"></a-input-number>
   </a-form-item>
   <a-form-item label="Gateway">
     <a-select mode="tags" v-model="inbound.settings.gateway" :style="{ width: '100%' }" :token-separators="[',']"
@@ -72,6 +69,17 @@
   </a-form-item>
   <a-form-item label="Auto Outbounds">
     <a-input v-model.trim="inbound.settings.autoOutboundsInterface" placeholder="auto, eth0, ens3, Ethernet"></a-input>
+  </a-form-item>
+  <a-form-item label="System DNS to Gateway">
+    <a-switch v-model="inbound.settings.autoSystemDnsToGateway"></a-switch>
+    <div>Linux v26.9.30+: requires Gateway and configures system DNS through the TUN gateway.</div>
+  </a-form-item>
+  <a-form-item label="Windows WFP Leak Block">
+    <a-select mode="multiple" v-model="inbound.settings.autoSystemWfpBlockLeak" :style="{ width: '100%' }">
+      <a-select-option value="dns">dns</a-select-option>
+      <a-select-option value="misconfigtun">misconfigtun</a-select-option>
+    </a-select>
+    <div>Windows v26.9.30+: requires Auto Routing Table; dns also requires a DNS server.</div>
   </a-form-item>
 </a-form>
 {{end}}

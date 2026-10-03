@@ -28,6 +28,11 @@
                 inboundModalVueInstance.$message.error(xmcError);
                 return;
             }
+            const tunError = validateTunSettings(inModal.inbound, inModal.tunCapabilities);
+            if (tunError) {
+                inboundModalVueInstance.$message.error(tunError);
+                return;
+            }
             ObjectUtil.execute(inModal.confirm, inModal.inbound, inModal.dbInbound);
         },
         show({

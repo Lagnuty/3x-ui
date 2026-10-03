@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/mhsanaei/3x-ui/v2/logger"
@@ -230,14 +232,7 @@ func normalizeWireGuardOutbounds(raw []byte) []byte {
 		if !ok {
 			continue
 		}
-		if _, ok := settings["workers"]; ok {
-			delete(settings, "workers")
-			changed = true
-		}
-		if _, ok := settings["num_workers"]; ok {
-			delete(settings, "num_workers")
-			changed = true
-		}
+		changed = normalizeWireGuardSettings(settings) || changed
 	}
 
 	if !changed {
@@ -248,6 +243,39 @@ func normalizeWireGuardOutbounds(raw []byte) []byte {
 		return raw
 	}
 	return normalized
+}
+
+func normalizeWireGuardSettings(settings map[string]any) bool {
+	changed := false
+	for _, removed := range []string{"workers", "num_workers", "domainStrategy"} {
+		if _, ok := settings[removed]; ok {
+			delete(settings, removed)
+			changed = true
+		}
+	}
+	if raw, exists := settings["remoteDNS"]; exists {
+		switch value := raw.(type) {
+		case string:
+			if strings.EqualFold(strings.TrimSpace(value), "local") || strings.TrimSpace(value) == "" {
+				delete(settings, "remoteDNS")
+			} else {
+				settings["remoteDNS"] = []any{value}
+			}
+			changed = true
+		case []any:
+			filtered := make([]any, 0, len(value))
+			for _, item := range value {
+				if !strings.EqualFold(strings.TrimSpace(fmt.Sprint(item)), "local") {
+					filtered = append(filtered, item)
+				}
+			}
+			if len(filtered) != len(value) {
+				settings["remoteDNS"] = filtered
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 // GetXrayTraffic fetches the current traffic statistics from the running Xray process.

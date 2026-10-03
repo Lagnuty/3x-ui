@@ -69,6 +69,29 @@ func TestNormalizeInboundSettingsDropsWireGuardWorkers(t *testing.T) {
 	}
 }
 
+func TestNormalizeInboundSettingsCoversXray26930TunAndWireGuard(t *testing.T) {
+	wireguard := normalizeInboundSettings(WireGuard, `{"workers":2,"domainStrategy":"ForceIP","remoteDNS":["local","1.1.1.1"]}`)
+	var wg map[string]any
+	if err := json.Unmarshal([]byte(wireguard), &wg); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := wg["domainStrategy"]; exists {
+		t.Fatalf("removed WireGuard domainStrategy survived: %s", wireguard)
+	}
+	if got := wg["remoteDNS"].([]any); len(got) != 1 || got[0] != "1.1.1.1" {
+		t.Fatalf("remoteDNS = %#v", got)
+	}
+
+	tun := normalizeInboundSettings(TUN, `{"MTU":[1500,1280],"autoSystemDNS":true}`)
+	var tunSettings map[string]any
+	if err := json.Unmarshal([]byte(tun), &tunSettings); err != nil {
+		t.Fatal(err)
+	}
+	if tunSettings["mtu"] != float64(1500) || tunSettings["autoSystemDnsToGateway"] != true {
+		t.Fatalf("TUN settings = %#v", tunSettings)
+	}
+}
+
 func TestNormalizeStreamSettingsDropsIncompleteFinalMaskXMC(t *testing.T) {
 	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"profile":"chrome","texture":"","signature":"sig"}},{"type":"fragment","settings":{"packets":"tlshello"}}]}}`
 

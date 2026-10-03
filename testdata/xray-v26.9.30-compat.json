@@ -78,8 +78,11 @@
         "name": "xraycompat",
         "mtu": 1500,
         "gateway": ["10.77.0.1/24"],
+        "dns": ["1.1.1.1"],
         "autoSystemRoutingTable": ["main"],
-        "autoOutboundsInterface": "auto"
+        "autoOutboundsInterface": "auto",
+        "autoSystemDnsToGateway": true,
+        "autoSystemWfpBlockLeak": ["dns", "misconfigtun"]
       }
     }
   ],

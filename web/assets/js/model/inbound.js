@@ -190,6 +190,23 @@ function validateFinalMaskXMC(finalmask) {
     return '';
 }
 
+function validateTunSettings(inbound, capabilities) {
+    if (inbound?.protocol !== Protocols.TUN) return '';
+    const settings = inbound.settings || {};
+    const platform = capabilities?.platform || '';
+    if (platform === 'linux' && settings.autoSystemDnsToGateway && (!settings.gateway || settings.gateway.length === 0)) {
+        return 'TUN autoSystemDnsToGateway requires at least one gateway on Linux';
+    }
+    const leakRules = settings.autoSystemWfpBlockLeak || [];
+    if (platform === 'windows' && leakRules.length > 0 && (!settings.autoSystemRoutingTable || settings.autoSystemRoutingTable.length === 0)) {
+        return 'TUN WFP leak blocking requires Auto Routing Table on Windows';
+    }
+    if (platform === 'windows' && leakRules.includes('dns') && (!settings.dns || settings.dns.length === 0)) {
+        return 'TUN WFP DNS leak blocking requires at least one DNS server';
+    }
+    return '';
+}
+
 class XrayCommonClass {
 
     static toJsonArray(arr) {
@@ -3342,12 +3359,14 @@ Inbound.TunSettings = class extends Inbound.Settings {
     constructor(
         protocol,
         name = 'xray0',
-        mtu = [1500, 1280],
+        mtu = 1500,
         gateway = [],
         dns = [],
         userLevel = 0,
         autoSystemRoutingTable = [],
-        autoOutboundsInterface = 'auto'
+        autoOutboundsInterface = 'auto',
+        autoSystemDnsToGateway = false,
+        autoSystemWfpBlockLeak = []
     ) {
         super(protocol);
         this.name = name;
@@ -3357,33 +3376,37 @@ Inbound.TunSettings = class extends Inbound.Settings {
         this.userLevel = userLevel;
         this.autoSystemRoutingTable = Array.isArray(autoSystemRoutingTable) ? autoSystemRoutingTable : [];
         this.autoOutboundsInterface = autoOutboundsInterface;
+        this.autoSystemDnsToGateway = autoSystemDnsToGateway;
+        this.autoSystemWfpBlockLeak = Array.isArray(autoSystemWfpBlockLeak) ? autoSystemWfpBlockLeak : [];
     }
 
     _normalizeMtu(mtu) {
         if (!Array.isArray(mtu)) {
             const single = Number(mtu) || 1500;
-            return [single, single];
+            return single;
         }
         if (mtu.length === 0) {
-            return [1500, 1280];
+            return 1500;
         }
         if (mtu.length === 1) {
             const single = Number(mtu[0]) || 1500;
-            return [single, single];
+            return single;
         }
-        return [Number(mtu[0]) || 1500, Number(mtu[1]) || 1280];
+        return Number(mtu[0]) || 1500;
     }
 
     static fromJson(json = {}) {
         return new Inbound.TunSettings(
             Protocols.TUN,
             json.name ?? 'xray0',
-            json.mtu ?? json.MTU ?? [1500, 1280],
+            json.mtu ?? json.MTU ?? 1500,
             json.gateway ?? json.Gateway ?? [],
             json.dns ?? json.DNS ?? [],
             json.userLevel ?? 0,
             json.autoSystemRoutingTable ?? [],
-            Object.prototype.hasOwnProperty.call(json, 'autoOutboundsInterface') ? json.autoOutboundsInterface : 'auto'
+            Object.prototype.hasOwnProperty.call(json, 'autoOutboundsInterface') ? json.autoOutboundsInterface : 'auto',
+            json.autoSystemDnsToGateway ?? json.autoSystemDNS ?? false,
+            json.autoSystemWfpBlockLeak ?? []
         );
     }
 
@@ -3396,6 +3419,8 @@ Inbound.TunSettings = class extends Inbound.Settings {
             userLevel: this.userLevel || 0,
             autoSystemRoutingTable: this.autoSystemRoutingTable,
             autoOutboundsInterface: this.autoOutboundsInterface,
+            autoSystemDnsToGateway: this.autoSystemDnsToGateway,
+            autoSystemWfpBlockLeak: this.autoSystemWfpBlockLeak,
         };
     }
 };

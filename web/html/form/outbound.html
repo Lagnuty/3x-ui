@@ -249,11 +249,6 @@
         <a-form-item label='{{ i18n "pages.xray.wireguard.publicKey" }}'>
           <a-input disabled v-model="outbound.settings.pubKey"></a-input>
         </a-form-item>
-        <a-form-item label='{{ i18n "pages.xray.wireguard.domainStrategy" }}'>
-          <a-select v-model="outbound.settings.domainStrategy" :dropdown-class-name="themeSwitcher.currentTheme">
-            <a-select-option v-for="wds in ['', ...WireguardDomainStrategy]" :value="wds">[[ wds ]]</a-select-option>
-          </a-select>
-        </a-form-item>
         <a-form-item label="MTU">
           <a-input-number v-model.number="outbound.settings.mtu" min="0"></a-input-number>
         </a-form-item>

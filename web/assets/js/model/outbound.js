@@ -2159,7 +2159,6 @@ Outbound.WireguardSettings = class extends CommonClass {
         mtu = 1420,
         secretKey = '',
         address = [''],
-        domainStrategy = '',
         reserved = '',
         peers = [new Outbound.WireguardSettings.Peer()],
         noKernelTun = false,
@@ -2169,7 +2168,6 @@ Outbound.WireguardSettings = class extends CommonClass {
         this.secretKey = secretKey;
         this.pubKey = secretKey.length > 0 ? Wireguard.generateKeypair(secretKey).publicKey : '';
         this.address = Array.isArray(address) ? address.join(',') : address;
-        this.domainStrategy = domainStrategy;
         this.reserved = Array.isArray(reserved) ? reserved.join(',') : reserved;
         this.peers = peers;
         this.noKernelTun = noKernelTun;
@@ -2188,7 +2186,6 @@ Outbound.WireguardSettings = class extends CommonClass {
             json.mtu,
             json.secretKey,
             json.address,
-            json.domainStrategy,
             json.reserved,
             json.peers.map(peer => Outbound.WireguardSettings.Peer.fromJson(peer)),
             json.noKernelTun,
@@ -2200,7 +2197,6 @@ Outbound.WireguardSettings = class extends CommonClass {
             mtu: this.mtu ?? undefined,
             secretKey: this.secretKey,
             address: this.address ? this.address.split(",") : [],
-            domainStrategy: WireguardDomainStrategy.includes(this.domainStrategy) ? this.domainStrategy : undefined,
             reserved: this.reserved ? this.reserved.split(",").map(Number) : undefined,
             peers: Outbound.WireguardSettings.Peer.toJsonArray(this.peers),
             noKernelTun: this.noKernelTun,

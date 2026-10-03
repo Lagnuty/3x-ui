@@ -24,6 +24,7 @@ const (
 	Shadowsocks Protocol = "shadowsocks"
 	Mixed       Protocol = "mixed"
 	WireGuard   Protocol = "wireguard"
+	TUN         Protocol = "tun"
 	// UI stores Hysteria v1 and v2 both as "hysteria" and uses
 	// settings.version to discriminate. Imports from outside the panel
 	// can carry the literal "hysteria2" string, so IsHysteria below
@@ -121,11 +122,57 @@ func normalizeInboundSettings(protocol Protocol, settings string) string {
 	}
 	changed := false
 	if protocol == WireGuard {
-		for _, key := range []string{"workers", "num_workers"} {
+		for _, key := range []string{"workers", "num_workers", "domainStrategy"} {
 			if _, exists := cfg[key]; exists {
 				delete(cfg, key)
 				changed = true
 			}
+		}
+		if remoteDNS, exists := cfg["remoteDNS"]; exists {
+			switch value := remoteDNS.(type) {
+			case string:
+				if strings.EqualFold(strings.TrimSpace(value), "local") || strings.TrimSpace(value) == "" {
+					delete(cfg, "remoteDNS")
+				} else {
+					cfg["remoteDNS"] = []any{value}
+				}
+				changed = true
+			case []any:
+				filtered := make([]any, 0, len(value))
+				for _, item := range value {
+					if !strings.EqualFold(strings.TrimSpace(fmt.Sprint(item)), "local") {
+						filtered = append(filtered, item)
+					}
+				}
+				if len(filtered) != len(value) {
+					cfg["remoteDNS"] = filtered
+					changed = true
+				}
+			}
+		}
+	}
+	if protocol == TUN {
+		if legacy, exists := cfg["MTU"]; exists {
+			if _, current := cfg["mtu"]; !current {
+				cfg["mtu"] = legacy
+			}
+			delete(cfg, "MTU")
+			changed = true
+		}
+		if values, ok := cfg["mtu"].([]any); ok {
+			if len(values) > 0 {
+				cfg["mtu"] = values[0]
+			} else {
+				delete(cfg, "mtu")
+			}
+			changed = true
+		}
+		if legacy, exists := cfg["autoSystemDNS"]; exists {
+			if _, current := cfg["autoSystemDnsToGateway"]; !current {
+				cfg["autoSystemDnsToGateway"] = legacy
+			}
+			delete(cfg, "autoSystemDNS")
+			changed = true
 		}
 	}
 	if IsHysteria(protocol) {
