@@ -2991,7 +2991,38 @@ func (s *InboundService) MigrationRequirements() {
 
 func (s *InboundService) MigrateDB() {
 	s.MigrationRequirements()
+	s.MigrationStreamSettings()
 	s.MigrationRemoveOrphanedTraffics()
+}
+
+// MigrationStreamSettings persists the same compatibility normalization used
+// by Xray config generation, so deprecated fields do not return after restart.
+func (s *InboundService) MigrationStreamSettings() {
+	db := database.GetDB()
+	var inbounds []model.Inbound
+	if err := db.Select("id", "protocol", "settings", "stream_settings").Find(&inbounds).Error; err != nil {
+		logger.Error("config migration: unable to load inbounds:", err)
+		return
+	}
+	for index := range inbounds {
+		inbound := &inbounds[index]
+		migration := model.MigrateInboundConfig(inbound.Protocol, inbound.Settings, inbound.StreamSettings)
+		if !migration.Changed {
+			continue
+		}
+		updates := map[string]any{
+			"protocol":        migration.Protocol,
+			"settings":        migration.Settings,
+			"stream_settings": migration.StreamSettings,
+		}
+		if err := db.Model(&model.Inbound{}).Where("id = ?", inbound.Id).Updates(updates).Error; err != nil {
+			logger.Error("config migration: unable to update inbound", inbound.Id, err)
+			continue
+		}
+		for _, warning := range migration.Warnings {
+			logger.Warning("config migration: inbound", inbound.Id, warning)
+		}
+	}
 }
 
 func (s *InboundService) GetOnlineClients() []string {

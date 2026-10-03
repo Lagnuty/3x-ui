@@ -94,6 +94,7 @@ type HistoryOfSeeders struct {
 
 // GenXrayInboundConfig generates an Xray inbound configuration from the Inbound model.
 func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
+	migration := MigrateInboundConfig(i.Protocol, i.Settings, i.StreamSettings)
 	listen := i.Listen
 	// Default to 0.0.0.0 (all interfaces) when listen is empty
 	// This ensures proper dual-stack IPv4/IPv6 binding in systems where bindv6only=0
@@ -104,26 +105,56 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 	return &xray.InboundConfig{
 		Listen:         json_util.RawMessage(listen),
 		Port:           i.Port,
-		Protocol:       string(i.Protocol),
-		Settings:       json_util.RawMessage(normalizeInboundSettings(i.Protocol, i.Settings)),
-		StreamSettings: json_util.RawMessage(normalizeStreamSettings(i.StreamSettings)),
+		Protocol:       string(migration.Protocol),
+		Settings:       json_util.RawMessage(migration.Settings),
+		StreamSettings: json_util.RawMessage(migration.StreamSettings),
 		Tag:            i.Tag,
 		Sniffing:       json_util.RawMessage(i.Sniffing),
 	}
 }
 
 func normalizeInboundSettings(protocol Protocol, settings string) string {
-	if protocol != WireGuard {
-		return settings
-	}
-
 	var cfg map[string]any
 	if err := json.Unmarshal([]byte(settings), &cfg); err != nil {
 		return settings
 	}
-
-	delete(cfg, "workers")
-	delete(cfg, "num_workers")
+	changed := false
+	if protocol == WireGuard {
+		for _, key := range []string{"workers", "num_workers"} {
+			if _, exists := cfg[key]; exists {
+				delete(cfg, key)
+				changed = true
+			}
+		}
+	}
+	if IsHysteria(protocol) {
+		if _, exists := cfg["clients"]; !exists {
+			if users, ok := cfg["users"].([]any); ok {
+				cfg["clients"] = users
+				changed = true
+			} else if auth, ok := cfg["auth"].(string); ok && strings.TrimSpace(auth) != "" {
+				cfg["clients"] = []any{map[string]any{"auth": auth}}
+				changed = true
+			}
+		}
+		if protocol == Hysteria2 {
+			if _, exists := cfg["version"]; !exists {
+				cfg["version"] = 2
+				changed = true
+			}
+		}
+		if _, exists := cfg["users"]; exists {
+			delete(cfg, "users")
+			changed = true
+		}
+		if _, exists := cfg["auth"]; exists {
+			delete(cfg, "auth")
+			changed = true
+		}
+	}
+	if !changed {
+		return settings
+	}
 
 	normalized, err := json.Marshal(cfg)
 	if err != nil {
@@ -139,51 +170,208 @@ func normalizeStreamSettings(streamSettings string) string {
 	}
 
 	changed := normalizeFinalMaskStreamSettings(stream)
-
-	xhttp, ok := stream["xhttpSettings"].(map[string]any)
-	if !ok || xhttp == nil {
-		if !changed {
-			return streamSettings
-		}
-		normalized, err := json.Marshal(stream)
-		if err != nil {
-			return streamSettings
-		}
-		return string(normalized)
-	}
-
-	if _, ok := xhttp["sessionPlacement"]; ok {
+	if normalizeXHTTPStreamSettings(stream) {
 		changed = true
 	}
-	if _, ok := xhttp["sessionKey"]; ok {
+	if normalizeRealityStreamSettings(stream) {
 		changed = true
 	}
-	if normalizeXHTTPCoreDefaults(xhttp) {
+	if normalizeTLSStreamSettings(stream) {
 		changed = true
 	}
-
+	if normalizeHysteriaStreamSettings(stream) {
+		changed = true
+	}
 	if !changed {
 		return streamSettings
 	}
-
-	if _, ok := xhttp["sessionIDPlacement"]; !ok {
-		if v, ok := xhttp["sessionPlacement"]; ok {
-			xhttp["sessionIDPlacement"] = v
-		}
-	}
-	if _, ok := xhttp["sessionIDKey"]; !ok {
-		if v, ok := xhttp["sessionKey"]; ok {
-			xhttp["sessionIDKey"] = v
-		}
-	}
-	delete(xhttp, "sessionPlacement")
-	delete(xhttp, "sessionKey")
 
 	normalized, err := json.Marshal(stream)
 	if err != nil {
 		return streamSettings
 	}
 	return string(normalized)
+}
+
+func normalizeXHTTPStreamSettings(stream map[string]any) bool {
+	xhttp, ok := stream["xhttpSettings"].(map[string]any)
+	if !ok || xhttp == nil {
+		return false
+	}
+	changed := normalizeXHTTPCoreDefaults(xhttp)
+	for _, suffix := range []string{"Placement", "Key", "Table", "Length"} {
+		legacy := "session" + suffix
+		current := "sessionID" + suffix
+		if value, exists := xhttp[legacy]; exists {
+			if _, hasCurrent := xhttp[current]; !hasCurrent {
+				xhttp[current] = value
+			}
+			delete(xhttp, legacy)
+			changed = true
+		}
+	}
+	return changed
+}
+
+func normalizeRealityStreamSettings(stream map[string]any) bool {
+	reality, _ := stream["realitySettings"].(map[string]any)
+	if reality == nil {
+		return false
+	}
+	// 26.3.27 was the old built-in floor copied by older panel versions.
+	// Since v26.9.8 an absent/empty value means that no minimum is enforced.
+	if value, ok := reality["minClientVer"].(string); ok && strings.TrimSpace(value) == "26.3.27" {
+		delete(reality, "minClientVer")
+		return true
+	}
+	return false
+}
+
+func normalizeTLSStreamSettings(stream map[string]any) bool {
+	tls, _ := stream["tlsSettings"].(map[string]any)
+	if tls == nil {
+		return false
+	}
+	client, _ := tls["settings"].(map[string]any)
+	if client == nil {
+		client = map[string]any{}
+	}
+	changed := false
+	for _, key := range []string{"verifyPeerCertByName", "pinnedPeerCertSha256"} {
+		if value, exists := tls[key]; exists {
+			if _, current := client[key]; !current {
+				client[key] = value
+			}
+			delete(tls, key)
+			changed = true
+		}
+	}
+	for _, legacy := range []string{"pinnedPeerCertificateSha256", "pinnedPeerCertificateChainSha256"} {
+		if value, exists := client[legacy]; exists {
+			if _, current := client["pinnedPeerCertSha256"]; !current {
+				client["pinnedPeerCertSha256"] = value
+			}
+			delete(client, legacy)
+			changed = true
+		}
+	}
+	for _, target := range []map[string]any{tls, client} {
+		if _, exists := target["allowInsecure"]; exists {
+			delete(target, "allowInsecure")
+			changed = true
+		}
+	}
+	if len(client) > 0 {
+		tls["settings"] = client
+	}
+	return changed
+}
+
+func normalizeHysteriaStreamSettings(stream map[string]any) bool {
+	changed := false
+	legacyV2 := false
+	if _, exists := stream["hysteriaSettings"]; !exists {
+		for _, legacy := range []string{"hysteria2Settings", "hy2Settings"} {
+			if value, ok := stream[legacy].(map[string]any); ok {
+				stream["hysteriaSettings"] = value
+				delete(stream, legacy)
+				changed = true
+				legacyV2 = true
+				break
+			}
+		}
+	}
+	if network, _ := stream["network"].(string); network == "hysteria2" {
+		stream["network"] = "hysteria"
+		changed = true
+		legacyV2 = true
+	}
+	hysteria, _ := stream["hysteriaSettings"].(map[string]any)
+	if hysteria == nil {
+		return changed
+	}
+	for legacy, current := range map[string]string{
+		"authString":        "auth",
+		"udpIdleTimeoutSec": "udpIdleTimeout",
+	} {
+		if value, exists := hysteria[legacy]; exists {
+			if _, currentExists := hysteria[current]; !currentExists {
+				hysteria[current] = value
+			}
+			delete(hysteria, legacy)
+			changed = true
+		}
+	}
+	if _, exists := hysteria["version"]; !exists && legacyV2 {
+		hysteria["version"] = 2
+		changed = true
+	}
+	return changed
+}
+
+// ConfigMigrationResult describes the persistent normalization of one inbound.
+type ConfigMigrationResult struct {
+	Protocol       Protocol
+	Settings       string
+	StreamSettings string
+	Warnings       []string
+	Changed        bool
+}
+
+// MigrateInboundConfig centralizes stored-config migrations and diagnostics.
+func MigrateInboundConfig(protocol Protocol, settings, streamSettings string) ConfigMigrationResult {
+	result := ConfigMigrationResult{Protocol: protocol, Settings: settings, StreamSettings: streamSettings}
+	result.Settings = normalizeInboundSettings(protocol, settings)
+	result.StreamSettings = normalizeStreamSettings(streamSettings)
+	if protocol == Hysteria2 {
+		result.Protocol = Hysteria
+	}
+	result.Changed = result.Protocol != protocol || result.Settings != settings || result.StreamSettings != streamSettings
+
+	var before, after map[string]any
+	if json.Unmarshal([]byte(streamSettings), &before) == nil && json.Unmarshal([]byte(result.StreamSettings), &after) == nil {
+		if hasLegacyAllowInsecure(before) && !hasLegacyAllowInsecure(after) {
+			result.Warnings = append(result.Warnings, "removed deprecated TLS allowInsecure; configure certificate pinning or name verification")
+		}
+		if finalMaskXMCCount(before) > finalMaskXMCCount(after) {
+			result.Warnings = append(result.Warnings, "removed incomplete FinalMask XMC entry")
+		}
+	}
+	return result
+}
+
+func hasLegacyAllowInsecure(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, exists := typed["allowInsecure"]; exists {
+			return true
+		}
+		for _, child := range typed {
+			if hasLegacyAllowInsecure(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if hasLegacyAllowInsecure(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func finalMaskXMCCount(stream map[string]any) int {
+	finalmask, _ := stream["finalmask"].(map[string]any)
+	tcp, _ := finalmask["tcp"].([]any)
+	count := 0
+	for _, raw := range tcp {
+		mask, _ := raw.(map[string]any)
+		if mask["type"] == "xmc" {
+			count++
+		}
+	}
+	return count
 }
 
 func normalizeXHTTPCoreDefaults(xhttp map[string]any) bool {
@@ -276,7 +464,8 @@ func hasCompleteFinalMaskXMCSettings(value any) bool {
 		return false
 	}
 	for _, key := range []string{"profile", "texture", "signature"} {
-		if strings.TrimSpace(fmt.Sprint(settings[key])) == "" {
+		field, exists := settings[key]
+		if !exists || field == nil || strings.TrimSpace(fmt.Sprint(field)) == "" {
 			return false
 		}
 	}

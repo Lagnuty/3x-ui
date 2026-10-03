@@ -136,3 +136,77 @@ func TestNormalizeStreamSettingsKeepsCustomXHTTPXMUX(t *testing.T) {
 		t.Fatalf("maxConcurrency = %v, want 8-12", xmux["maxConcurrency"])
 	}
 }
+
+func TestMigrateInboundConfigCoversCompatibilityFields(t *testing.T) {
+	stream := `{
+		"network":"xhttp",
+		"xhttpSettings":{"sessionPlacement":"cookie","sessionTable":"hex","sessionLength":24},
+		"realitySettings":{"minClientVer":"26.3.27"},
+		"tlsSettings":{"allowInsecure":true,"verifyPeerCertByName":"verify.example.com","settings":{"pinnedPeerCertificateChainSha256":["pin"]}},
+		"finalmask":{"tcp":[{"type":"xmc","settings":{"profile":"chrome"}}]}
+	}`
+	result := MigrateInboundConfig(VLESS, `{}`, stream)
+	if !result.Changed {
+		t.Fatal("migration did not report a change")
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(result.StreamSettings), &got); err != nil {
+		t.Fatal(err)
+	}
+	xhttp := got["xhttpSettings"].(map[string]any)
+	if xhttp["sessionIDPlacement"] != "cookie" || xhttp["sessionIDTable"] != "hex" || xhttp["sessionIDLength"] != float64(24) {
+		t.Fatalf("xhttp migration = %#v", xhttp)
+	}
+	if _, exists := got["realitySettings"].(map[string]any)["minClientVer"]; exists {
+		t.Fatal("legacy REALITY minimum was not cleared")
+	}
+	tls := got["tlsSettings"].(map[string]any)
+	client := tls["settings"].(map[string]any)
+	if client["verifyPeerCertByName"] != "verify.example.com" {
+		t.Fatalf("TLS name verification = %#v", client)
+	}
+	if _, exists := client["pinnedPeerCertSha256"]; !exists {
+		t.Fatalf("TLS pin was not migrated: %#v", client)
+	}
+	if hasLegacyAllowInsecure(got) {
+		t.Fatal("allowInsecure survived migration")
+	}
+	if _, exists := got["finalmask"]; exists {
+		t.Fatal("incomplete FinalMask XMC survived migration")
+	}
+	if len(result.Warnings) != 2 {
+		t.Fatalf("warnings = %#v, want TLS and FinalMask warnings", result.Warnings)
+	}
+}
+
+func TestMigrateInboundConfigNormalizesLegacyHysteria2(t *testing.T) {
+	settings := `{"auth":"secret"}`
+	stream := `{"network":"hysteria2","hy2Settings":{"authString":"fallback","udpIdleTimeoutSec":45}}`
+	result := MigrateInboundConfig(Hysteria2, settings, stream)
+	if result.Protocol != Hysteria {
+		t.Fatalf("protocol = %s, want hysteria", result.Protocol)
+	}
+
+	var gotSettings, gotStream map[string]any
+	_ = json.Unmarshal([]byte(result.Settings), &gotSettings)
+	_ = json.Unmarshal([]byte(result.StreamSettings), &gotStream)
+	clients := gotSettings["clients"].([]any)
+	if clients[0].(map[string]any)["auth"] != "secret" || gotSettings["version"] != float64(2) {
+		t.Fatalf("hysteria settings = %#v", gotSettings)
+	}
+	if gotStream["network"] != "hysteria" {
+		t.Fatalf("network = %v", gotStream["network"])
+	}
+	hy := gotStream["hysteriaSettings"].(map[string]any)
+	if hy["auth"] != "fallback" || hy["udpIdleTimeout"] != float64(45) || hy["version"] != float64(2) {
+		t.Fatalf("hysteria stream = %#v", hy)
+	}
+}
+
+func TestMigrateInboundConfigKeepsExplicitRealityMinimum(t *testing.T) {
+	stream := `{"security":"reality","realitySettings":{"minClientVer":"26.9.8"}}`
+	result := MigrateInboundConfig(VLESS, `{}`, stream)
+	if result.StreamSettings != stream {
+		t.Fatalf("explicit minimum changed: %s", result.StreamSettings)
+	}
+}
