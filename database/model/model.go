@@ -4,6 +4,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
@@ -497,6 +498,11 @@ func normalizeLegacyFinalMaskUDPSettings(mask map[string]any) map[string]any {
 	return mask
 }
 
+var (
+	xmcUsernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,16}$`)
+	xmcUUIDPattern     = regexp.MustCompile(`(?i)^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
+)
+
 func hasCompleteFinalMaskXMCSettings(value any) bool {
 	settings, _ := value.(map[string]any)
 	if settings == nil {
@@ -519,6 +525,11 @@ func hasCompleteFinalMaskXMCSettings(value any) bool {
 			if !exists || field == nil || strings.TrimSpace(fmt.Sprint(field)) == "" {
 				return false
 			}
+		}
+		username := strings.TrimSpace(fmt.Sprint(profile["username"]))
+		uuid := strings.TrimSpace(fmt.Sprint(profile["uuid"]))
+		if !xmcUsernamePattern.MatchString(username) || !xmcUUIDPattern.MatchString(uuid) {
+			return false
 		}
 	}
 	return true

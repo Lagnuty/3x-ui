@@ -22,6 +22,11 @@
         inbound: new Inbound(),
         dbInbound: new DBInbound(),
         ok() {
+            const xmcError = validateFinalMaskXMC(inModal.inbound.stream?.finalmask);
+            if (xmcError) {
+                inboundModalVueInstance.$message.error(xmcError);
+                return;
+            }
             ObjectUtil.execute(inModal.confirm, inModal.inbound, inModal.dbInbound);
         },
         show({

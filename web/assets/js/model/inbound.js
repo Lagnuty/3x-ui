@@ -163,6 +163,33 @@ function isValidTLSPins(value) {
     return normalized === '' || normalized.split(',').every(pin => /^[0-9a-f]{64}$/.test(pin));
 }
 
+function validateFinalMaskXMC(finalmask) {
+    const masks = finalmask?.tcp || [];
+    for (let maskIndex = 0; maskIndex < masks.length; maskIndex++) {
+        const mask = masks[maskIndex];
+        if (mask?.type !== 'xmc') continue;
+        const settings = mask.settings || {};
+        if (!String(settings.password || '').trim()) return `XMC mask ${maskIndex + 1}: password is required`;
+        if (!Array.isArray(settings.profiles) || settings.profiles.length === 0) {
+            return `XMC mask ${maskIndex + 1}: at least one Minecraft profile is required`;
+        }
+        for (let profileIndex = 0; profileIndex < settings.profiles.length; profileIndex++) {
+            const profile = settings.profiles[profileIndex] || {};
+            if (!/^[A-Za-z0-9_]{3,16}$/.test(String(profile.username || '').trim())) {
+                return `XMC profile ${profileIndex + 1}: username must be 3-16 letters, digits or underscores`;
+            }
+            const uuid = String(profile.uuid || '').trim();
+            if (!/^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(uuid)) {
+                return `XMC profile ${profileIndex + 1}: UUID is invalid`;
+            }
+            if (!String(profile.texturesValue || '').trim() || !String(profile.texturesSignature || '').trim()) {
+                return `XMC profile ${profileIndex + 1}: textures value and signature are required`;
+            }
+        }
+    }
+    return '';
+}
+
 class XrayCommonClass {
 
     static toJsonArray(arr) {

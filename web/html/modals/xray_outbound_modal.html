@@ -27,6 +27,11 @@
         reverseTestResult: null,
         tags: [],
         ok() {
+            const xmcError = validateFinalMaskXMC(outModal.outbound.stream?.finalmask);
+            if (xmcError) {
+                app.$message.error(xmcError);
+                return;
+            }
             ObjectUtil.execute(outModal.confirm, outModal.outbound.toJson());
         },
         show({

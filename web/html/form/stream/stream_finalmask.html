@@ -161,7 +161,7 @@
         <template v-if="mask.type === 'xmc'">
           <a-alert v-if="!mask.settings.password || !mask.settings.profiles || mask.settings.profiles.length === 0"
             type="warning" show-icon
-            message="XMC requires a password and at least one complete Minecraft profile; incomplete masks are removed before saving.">
+            message="XMC requires a password and at least one valid Minecraft profile; invalid masks cannot be saved.">
           </a-alert>
           <a-form-item label="Hostname">
             <a-input v-model.trim="mask.settings.hostname" placeholder="Optional Minecraft hostname" />

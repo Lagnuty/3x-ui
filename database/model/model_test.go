@@ -89,6 +89,18 @@ func TestNormalizeStreamSettingsDropsIncompleteFinalMaskXMC(t *testing.T) {
 	}
 }
 
+func TestNormalizeStreamSettingsDropsInvalidFinalMaskXMCProfile(t *testing.T) {
+	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"password":"secret","profiles":[{"username":"x","uuid":"invalid","texturesValue":"tex","texturesSignature":"sig"}]}}]}}`
+	normalized := normalizeStreamSettings(stream)
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := got["finalmask"]; exists {
+		t.Fatalf("invalid XMC survived normalization: %s", normalized)
+	}
+}
+
 func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
 	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"hostname":"mc.example.com","password":"secret","profiles":[{"username":"player_1","uuid":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","texturesValue":"tex","texturesSignature":"sig"}]}}]}}`
 
