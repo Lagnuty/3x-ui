@@ -2,28 +2,23 @@ package sub
 
 import "testing"
 
-func TestSingBoxXHTTPUsesVersionAwareSessionNames(t *testing.T) {
-	settings := map[string]any{
-		"sessionPlacement":   "path",
-		"sessionIDPlacement": "cookie",
-		"xPaddingBytes":      "80-600",
+func TestSingBoxRejectsUnsupportedXrayExtensions(t *testing.T) {
+	if err := singBoxCompatibilityError(map[string]any{"network": "xhttp"}); err == nil {
+		t.Fatal("XHTTP was accepted for official sing-box")
 	}
-	legacy := map[string]any{}
-	copySingBoxXHTTP(legacy, settings, "26.6.1")
-	if legacy["session_placement"] != "path" {
-		t.Fatalf("legacy xhttp = %#v", legacy)
+	if err := singBoxCompatibilityError(map[string]any{
+		"network": "tcp",
+		"finalmask": map[string]any{"tcp": []any{
+			map[string]any{"type": "fragment", "settings": map[string]any{"packets": "tlshello"}},
+		}},
+	}); err == nil {
+		t.Fatal("FinalMask was accepted for official sing-box")
 	}
-	if _, exists := legacy["session_id_placement"]; exists {
-		t.Fatalf("legacy output contains current field: %#v", legacy)
+	if err := singBoxCompatibilityError(map[string]any{"network": "kcp"}); err == nil {
+		t.Fatal("mKCP was accepted for official sing-box")
 	}
-
-	modern := map[string]any{}
-	copySingBoxXHTTP(modern, settings, "26.6.22")
-	if modern["session_id_placement"] != "cookie" {
-		t.Fatalf("modern xhttp = %#v", modern)
-	}
-	if modern["x_padding_bytes"] != "80-600" {
-		t.Fatalf("padding missing: %#v", modern)
+	if err := singBoxCompatibilityError(map[string]any{"network": "grpc"}); err != nil {
+		t.Fatalf("gRPC was rejected: %v", err)
 	}
 }
 
@@ -43,7 +38,7 @@ func TestSingBoxStreamExportsRealityAndNormalizedFinalMask(t *testing.T) {
 			map[string]any{"type": "fragment", "settings": map[string]any{"packets": "tlshello"}},
 		}},
 	}
-	applySingBoxStream(outbound, stream, "26.9.8")
+	applySingBoxStream(outbound, stream)
 	tls := outbound["tls"].(map[string]any)
 	if tls["server_name"] != "example.com" {
 		t.Fatalf("tls = %#v", tls)
@@ -51,8 +46,7 @@ func TestSingBoxStreamExportsRealityAndNormalizedFinalMask(t *testing.T) {
 	if tls["utls"].(map[string]any)["fingerprint"] != "chrome" {
 		t.Fatalf("utls = %#v", tls["utls"])
 	}
-	finalMask := outbound["final_mask"].(map[string]any)
-	if len(finalMask["tcp"].([]any)) != 1 {
-		t.Fatalf("final_mask = %#v", finalMask)
+	if _, exists := outbound["final_mask"]; exists {
+		t.Fatalf("unsupported final_mask leaked into sing-box: %#v", outbound)
 	}
 }

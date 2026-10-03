@@ -188,7 +188,9 @@ func (a *SUBController) subJsons(c *gin.Context) {
 		jsonSub, header, err = a.subJsonService.GetJson(subId, host)
 		c.Header("X-Subscription-Format", "xray")
 	}
-	if err != nil || len(jsonSub) == 0 {
+	if err != nil {
+		c.String(400, err.Error())
+	} else if len(jsonSub) == 0 {
 		c.String(400, "Error!")
 	} else {
 		profileUrl := a.subProfileUrl

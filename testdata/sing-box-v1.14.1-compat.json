@@ -1,0 +1,27 @@
+{
+  "$schema": "https://sing-box.sagernet.org/schema.json",
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "audit-ws-reality",
+      "server": "example.com",
+      "server_port": 443,
+      "uuid": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": { "Host": "example.com" }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "UuMBgl7MXTPx9inmQp2UC7Jcnwc6XYbwDNebonM-FCc",
+          "short_id": "0123456789abcdef"
+        }
+      }
+    }
+  ]
+}

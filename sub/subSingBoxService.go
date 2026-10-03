@@ -2,7 +2,6 @@ package sub
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -12,9 +11,9 @@ import (
 	"github.com/mhsanaei/3x-ui/v2/xray"
 )
 
-// GetSingBox emits an outbound-only sing-box subscription. Version selects
-// legacy or current names for XHTTP extension fields.
-func (s *SubJsonService) GetSingBox(subID, host, version string) (string, string, error) {
+// GetSingBox emits an outbound-only configuration for the official sing-box
+// schema. Xray-only transports are rejected instead of being silently changed.
+func (s *SubJsonService) GetSingBox(subID, host, _ string) (string, string, error) {
 	inbounds, err := s.SubService.getInboundsBySubId(subID)
 	if err != nil || len(inbounds) == 0 {
 		return "", "", err
@@ -23,6 +22,10 @@ func (s *SubJsonService) GetSingBox(subID, host, version string) (string, string
 	var traffic xray.ClientTraffic
 	firstTraffic := true
 	for _, inbound := range inbounds {
+		stream := unmarshalStreamSettings(inbound.StreamSettings)
+		if compatibilityErr := singBoxCompatibilityError(stream); compatibilityErr != nil {
+			return "", "", fmt.Errorf("sing-box export for inbound %q: %w", inbound.Tag, compatibilityErr)
+		}
 		clients, clientErr := s.inboundService.GetClients(inbound)
 		if clientErr != nil {
 			logger.Error("SubJsonService - GetSingBox: unable to get clients from inbound")
@@ -35,7 +38,7 @@ func (s *SubJsonService) GetSingBox(subID, host, version string) (string, string
 			item := s.SubService.getClientTraffics(inbound.ClientStats, client.Email)
 			mergeSubscriptionTraffic(&traffic, item, firstTraffic)
 			firstTraffic = false
-			outbounds = append(outbounds, s.buildSingBoxOutbounds(inbound, client, host, version)...)
+			outbounds = append(outbounds, s.buildSingBoxOutbounds(inbound, client, host)...)
 		}
 	}
 	if len(outbounds) == 0 {
@@ -70,7 +73,7 @@ func mergeSubscriptionTraffic(total *xray.ClientTraffic, item xray.ClientTraffic
 	}
 }
 
-func (s *SubJsonService) buildSingBoxOutbounds(inbound *model.Inbound, client model.Client, host, version string) []map[string]any {
+func (s *SubJsonService) buildSingBoxOutbounds(inbound *model.Inbound, client model.Client, host string) []map[string]any {
 	stream := unmarshalStreamSettings(inbound.StreamSettings)
 	external, _ := stream["externalProxy"].([]any)
 	if len(external) == 0 {
@@ -118,15 +121,15 @@ func (s *SubJsonService) buildSingBoxOutbounds(inbound *model.Inbound, client mo
 		default:
 			continue
 		}
-		applySingBoxStream(outbound, stream, version)
+		applySingBoxStream(outbound, stream)
 		result = append(result, outbound)
 	}
 	return result
 }
 
-func applySingBoxStream(outbound, stream map[string]any, version string) {
+func applySingBoxStream(outbound, stream map[string]any) {
 	network, _ := stream["network"].(string)
-	if transport := singBoxTransport(network, stream, version); transport != nil {
+	if transport := singBoxTransport(network, stream); transport != nil {
 		outbound["transport"] = transport
 	}
 	security, _ := stream["security"].(string)
@@ -155,14 +158,9 @@ func applySingBoxStream(outbound, stream map[string]any, version string) {
 		}
 		outbound["tls"] = tls
 	}
-	if finalmask, ok := stream["finalmask"].(map[string]any); ok {
-		if normalized := normalizeFinalMask(finalmask); normalized != nil {
-			outbound["final_mask"] = normalized
-		}
-	}
 }
 
-func singBoxTransport(network string, stream map[string]any, version string) map[string]any {
+func singBoxTransport(network string, stream map[string]any) map[string]any {
 	var source map[string]any
 	transport := map[string]any{}
 	switch network {
@@ -179,11 +177,6 @@ func singBoxTransport(network string, stream map[string]any, version string) map
 	case "httpupgrade":
 		transport["type"] = "httpupgrade"
 		source, _ = stream["httpupgradeSettings"].(map[string]any)
-	case "xhttp":
-		transport["type"] = "xhttp"
-		source, _ = stream["xhttpSettings"].(map[string]any)
-		copySingBoxXHTTP(transport, source, version)
-		return transport
 	default:
 		return nil
 	}
@@ -196,53 +189,17 @@ func singBoxTransport(network string, stream map[string]any, version string) map
 	return transport
 }
 
-func copySingBoxXHTTP(dst, src map[string]any, version string) {
-	fields := map[string]string{
-		"path": "path", "host": "host", "mode": "mode", "xPaddingBytes": "x_padding_bytes",
-		"xPaddingKey": "x_padding_key", "xPaddingHeader": "x_padding_header", "xPaddingPlacement": "x_padding_placement",
-		"xPaddingMethod": "x_padding_method", "uplinkDataPlacement": "uplink_data_placement", "uplinkDataKey": "uplink_data_key",
-		"uplinkHTTPMethod": "uplink_http_method",
+func singBoxCompatibilityError(stream map[string]any) error {
+	network, _ := stream["network"].(string)
+	switch network {
+	case "", "tcp", "ws", "grpc", "httpupgrade":
+	case "xhttp":
+		return fmt.Errorf("official sing-box does not support XHTTP transport; use Mihomo or an Xray share link")
+	default:
+		return fmt.Errorf("official sing-box cannot represent Xray transport %q", network)
 	}
-	for source, target := range fields {
-		if value, ok := src[source].(string); ok && value != "" {
-			dst[target] = value
-		}
+	if finalmask, ok := stream["finalmask"].(map[string]any); ok && normalizeFinalMask(finalmask) != nil {
+		return fmt.Errorf("official sing-box does not support Xray FinalMask")
 	}
-	modern := compareRelease(version, 26, 6, 22) >= 0 || strings.TrimSpace(version) == ""
-	for _, field := range []string{"Placement", "Key", "Table", "Length"} {
-		source := "sessionID" + field
-		targetPrefix := "session_id_"
-		if !modern {
-			source = "session" + field
-			targetPrefix = "session_"
-		}
-		if value, ok := nonZeroShareValue(src[source]); ok {
-			dst[targetPrefix+strings.ToLower(field)] = value
-		}
-	}
-	if headers, ok := nonEmptyShareObject(src["headers"]); ok {
-		dst["headers"] = headers
-	}
-}
-
-func compareRelease(version string, major, minor, patch int) int {
-	version = strings.TrimLeft(strings.TrimSpace(version), "vV")
-	parts := strings.SplitN(version, ".", 4)
-	if len(parts) < 3 {
-		return 0
-	}
-	want := []int{major, minor, patch}
-	for index := range want {
-		value, err := strconv.Atoi(strings.TrimRightFunc(parts[index], func(r rune) bool { return r < '0' || r > '9' }))
-		if err != nil {
-			return 0
-		}
-		if value < want[index] {
-			return -1
-		}
-		if value > want[index] {
-			return 1
-		}
-	}
-	return 0
+	return nil
 }
