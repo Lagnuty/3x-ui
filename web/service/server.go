@@ -97,6 +97,19 @@ type Status struct {
 		Mem     uint64 `json:"mem"`
 		Uptime  uint64 `json:"uptime"`
 	} `json:"appStats"`
+	TunCapabilities TunCapabilityStatus `json:"tunCapabilities"`
+}
+
+// TunCapabilityStatus reports whether the panel process can create and route
+// a TUN interface on the current host.
+type TunCapabilityStatus struct {
+	Platform     string `json:"platform"`
+	DeviceExists bool   `json:"deviceExists"`
+	Root         bool   `json:"root"`
+	NetAdmin     bool   `json:"netAdmin"`
+	NetRaw       bool   `json:"netRaw"`
+	Ready        bool   `json:"ready"`
+	Detail       string `json:"detail"`
 }
 
 // ReverseTunnelTestResult is the result of probing a public endpoint routed
@@ -335,6 +348,7 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	status := &Status{
 		T: now,
 	}
+	status.TunCapabilities = detectTunCapabilities()
 
 	// CPU stats
 	util, err := s.sampleCPUUtilization()

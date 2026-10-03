@@ -48,8 +48,10 @@
     <a-input-number v-model.number="inbound.settings.userLevel" :min="0" placeholder="0"></a-input-number>
   </a-form-item>
   <a-form-item label="Auto Routing Table">
-    <a-alert type="info" show-icon
-      message="Linux needs root or CAP_NET_ADMIN/CAP_NET_RAW for TUN and route updates; Windows needs Administrator privileges and a working TUN driver."
+    <a-alert :type="inModal.tunCapabilities && inModal.tunCapabilities.ready ? 'success' : 'warning'" show-icon
+      :message="inModal.tunCapabilities
+        ? inModal.tunCapabilities.detail
+        : 'Checking TUN device and process privileges…'"
       style="margin-bottom: 12px"></a-alert>
     <a-space style="margin-bottom: 8px">
       <a-button size="small"

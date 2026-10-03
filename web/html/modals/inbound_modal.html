@@ -13,6 +13,7 @@
         okText: '{{ i18n "sure" }}',
         isEdit: false,
         coreVersion: "Unknown",
+        tunCapabilities: null,
         mlkem768Tool: {
             seed: "",
             client: "",
@@ -71,6 +72,7 @@
             const msg = await HttpUtil.get("/panel/api/server/status");
             if (msg.success && msg.obj && msg.obj.xray) {
                 this.coreVersion = msg.obj.xray.version || "Unknown";
+                this.tunCapabilities = msg.obj.tunCapabilities || null;
             }
         },
         close() {
