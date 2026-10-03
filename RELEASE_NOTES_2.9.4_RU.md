@@ -297,3 +297,7 @@ ghcr.io/lagnuty/3x-ui:2.9.4-21
 
 Подробная техническая матрица находится в
 [`XRAY_V26_COMPATIBILITY_AUDIT.md`](XRAY_V26_COMPATIBILITY_AUDIT.md).
+
+Полный каталог новых элементов интерфейса, JSON-путей, типов, defaults,
+валидации и экспорта находится в
+[`XRAY_26_UI_FIELDS_RU.md`](XRAY_26_UI_FIELDS_RU.md).
