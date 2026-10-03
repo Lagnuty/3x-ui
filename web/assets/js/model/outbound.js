@@ -781,7 +781,18 @@ class UdpMask extends CommonClass {
             case 'header-dns':
                 return { domain: settings.domain || '' };
             case 'xdns':
-                return { resolvers: Array.isArray(settings.resolvers) ? settings.resolvers : [] };
+                return {
+                    domains: Array.isArray(settings.domains) ? settings.domains.map(domain => typeof domain === 'string' ? {
+                        name: domain, lenLimit: 255, labelLimit: 63, types: [], edns0: 0,
+                    } : {
+                        name: domain.name ?? '', lenLimit: domain.lenLimit ?? 255, labelLimit: domain.labelLimit ?? 63,
+                        types: Array.isArray(domain.types) ? domain.types : [], edns0: domain.edns0 ?? 0,
+                    }) : [],
+                    resolvers: Array.isArray(settings.resolvers) ? settings.resolvers.map(resolver => ({
+                        type: resolver.type ?? 'udp', settings: { addr: resolver.settings?.addr ?? '' },
+                    })) : [],
+                    extraPoll: settings.extraPoll ?? 0,
+                };
             case 'xicmp':
                 return {
                     dgram: settings.dgram ?? false,
@@ -853,6 +864,15 @@ class UdpMask extends CommonClass {
         }
         if (this.type === 'noise' && settings && Array.isArray(settings.noise)) {
             settings = { ...settings, noise: settings.noise.map(cleanItem) };
+        } else if (this.type === 'xdns' && settings) {
+            settings = {
+                ...settings,
+                domains: (settings.domains || []).map(domain => ({
+                    ...domain,
+                    types: (domain.types || []).map(Number).filter(Number.isFinite),
+                    edns0: Number(domain.edns0) || 0,
+                })),
+            };
         } else if (this.type === 'header-custom' && settings) {
             settings = {
                 ...settings,

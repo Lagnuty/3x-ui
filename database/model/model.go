@@ -541,6 +541,30 @@ func normalizeLegacyFinalMaskUDPSettings(mask map[string]any) map[string]any {
 				return map[string]any{"type": "xicmp", "settings": copySettings}
 			}
 		}
+	case "xdns":
+		if domains, ok := settings["domains"].([]any); ok {
+			converted := make([]any, 0, len(domains))
+			changed := false
+			for _, domain := range domains {
+				if name, legacy := domain.(string); legacy {
+					converted = append(converted, map[string]any{"name": name, "lenLimit": 255, "labelLimit": 63, "types": []any{}, "edns0": 0})
+					changed = true
+				} else {
+					converted = append(converted, domain)
+				}
+			}
+			if changed {
+				copySettings := map[string]any{}
+				for key, value := range settings {
+					copySettings[key] = value
+				}
+				copySettings["domains"] = converted
+				if _, exists := copySettings["resolvers"]; !exists {
+					copySettings["resolvers"] = []any{}
+				}
+				return map[string]any{"type": "xdns", "settings": copySettings}
+			}
+		}
 	}
 	return mask
 }

@@ -943,10 +943,34 @@
               <a-input v-model.trim="mask.settings.domain" placeholder="e.g., www.example.com"></a-input>
             </a-form-item>
             <template v-if="mask.type === 'xdns'">
-              <a-form-item label="Resolvers">
-                <a-select mode="tags" v-model="mask.settings.resolvers" :style="{ width: '100%' }"
-                  :token-separators="[',']" placeholder="e.g., xxx+udp://8.8.8.8:53"></a-select>
+              <a-form-item label="Domains">
+                <a-button icon="plus" size="small"
+                  @click="mask.settings.domains.push({name:'',lenLimit:255,labelLimit:63,types:[],edns0:0})"></a-button>
               </a-form-item>
+              <a-input-group compact v-for="(domain, domainIndex) in mask.settings.domains" :key="'xd'+domainIndex">
+                <a-input v-model.trim="domain.name" placeholder="dns.example" :style="{ width: '35%' }"></a-input>
+                <a-input-number v-model.number="domain.lenLimit" :min="1" :max="255" :style="{ width: '18%' }"></a-input-number>
+                <a-input-number v-model.number="domain.labelLimit" :min="1" :max="63" :style="{ width: '18%' }"></a-input-number>
+                <a-button icon="minus" @click="mask.settings.domains.splice(domainIndex, 1)"></a-button>
+              </a-input-group>
+              <a-form-item v-for="(domain, domainIndex) in mask.settings.domains" :key="'xdt'+domainIndex"
+                :label="`DNS types / EDNS0 #${domainIndex + 1}`">
+                <a-select mode="tags" v-model="domain.types" :token-separators="[',']" placeholder="1,28"
+                  :style="{ width: '70%' }"></a-select>
+                <a-input-number v-model.number="domain.edns0" :min="0" :style="{ width: '28%' }"></a-input-number>
+              </a-form-item>
+              <a-form-item label="Resolvers">
+                <a-button icon="plus" size="small"
+                  @click="mask.settings.resolvers.push({type:'udp',settings:{addr:'1.1.1.1:53'}})"></a-button>
+              </a-form-item>
+              <a-input-group compact v-for="(resolver, resolverIndex) in mask.settings.resolvers" :key="'xr'+resolverIndex">
+                <a-select v-model="resolver.type" :style="{ width: '25%' }">
+                  <a-select-option value="udp">UDP</a-select-option><a-select-option value="tcp">TCP</a-select-option>
+                </a-select>
+                <a-input v-model.trim="resolver.settings.addr" placeholder="1.1.1.1:53" :style="{ width: '60%' }"></a-input>
+                <a-button icon="minus" @click="mask.settings.resolvers.splice(resolverIndex, 1)"></a-button>
+              </a-input-group>
+              <a-form-item label="Extra Poll"><a-input-number v-model.number="mask.settings.extraPoll" :min="0" :max="3" /></a-form-item>
             </template>
             <template v-if="mask.type === 'noise'">
               <a-form-item label="Reset">
@@ -969,6 +993,7 @@
                     <a-select-option value="str">String</a-select-option>
                     <a-select-option value="hex">Hex</a-select-option>
                     <a-select-option value="base64">Base64</a-select-option>
+                    <a-select-option value="exp">Expression</a-select-option>
                   </a-select>
                 </a-form-item>
                 <template v-if="n.type === 'array'">

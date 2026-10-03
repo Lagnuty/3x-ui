@@ -50,7 +50,15 @@
           }],
           "udp": [
             { "type": "mkcp-legacy", "settings": { "header": "wireguard" } },
-            { "type": "xicmp", "settings": { "dgram": false, "ips": ["1.1.1.1"] } }
+            { "type": "xicmp", "settings": { "dgram": false, "ips": ["1.1.1.1"] } },
+            {
+              "type": "xdns",
+              "settings": {
+                "domains": [{ "name": "dns.example", "lenLimit": 255, "labelLimit": 63, "types": [1, 28], "edns0": 0 }],
+                "resolvers": [{ "type": "udp", "settings": { "addr": "1.1.1.1:53" } }],
+                "extraPoll": 1
+              }
+            }
           ]
         }
       }

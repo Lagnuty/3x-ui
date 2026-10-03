@@ -141,7 +141,7 @@ func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
 }
 
 func TestNormalizeStreamSettingsMigratesLegacyFinalMaskUDPShapes(t *testing.T) {
-	stream := `{"finalmask":{"udp":[{"type":"header-wireguard","settings":{}},{"type":"xicmp","settings":{"ip":"1.1.1.1","id":1}}]}}`
+	stream := `{"finalmask":{"udp":[{"type":"header-wireguard","settings":{}},{"type":"xicmp","settings":{"ip":"1.1.1.1","id":1}},{"type":"xdns","settings":{"domains":["dns.example"]}}]}}`
 	normalized := normalizeStreamSettings(stream)
 	var got map[string]any
 	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
@@ -154,6 +154,10 @@ func TestNormalizeStreamSettingsMigratesLegacyFinalMaskUDPShapes(t *testing.T) {
 	settings := udp[1].(map[string]any)["settings"].(map[string]any)
 	if len(settings["ips"].([]any)) != 1 {
 		t.Fatalf("xicmp = %#v", settings)
+	}
+	xdnsSettings := udp[2].(map[string]any)["settings"].(map[string]any)
+	if xdnsSettings["domains"].([]any)[0].(map[string]any)["name"] != "dns.example" {
+		t.Fatalf("xdns = %#v", xdnsSettings)
 	}
 }
 
