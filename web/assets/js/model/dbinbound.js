@@ -99,6 +99,9 @@ class DBInbound {
                 add('shadowsocks-legacy', 'Legacy Shadowsocks cipher', 'Move to Shadowsocks 2022 or convert to VLESS REALITY/Vision.');
             }
         }
+        if (stream.network === 'grpc') {
+            add('grpc-transport', 'gRPC transport is deprecated in Xray v26.9.30', 'Migrate to XHTTP stream-up over HTTP/2; v26.9.30 also has a reported reconnect regression.');
+        }
 
         const hasLegacyAllowInsecure = value => {
             if (!value || typeof value !== 'object') return false;

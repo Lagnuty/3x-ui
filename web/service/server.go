@@ -811,7 +811,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 			}
 		}
 		if target >= 26_009_030 && network == "grpc" {
-			reasons = append(reasons, "v26.9.30 has a reported gRPC reconnect regression; prefer XHTTP stream-up or test peer restarts")
+			reasons = append(reasons, "gRPC transport is deprecated and v26.9.30 has a reported reconnect regression; prefer XHTTP stream-up or test peer restarts")
 		}
 		if target >= 26_004_025 && (containsLegacyAllowInsecure(settings) || containsLegacyAllowInsecure(stream)) {
 			reasons = append(reasons, "legacy allowInsecure must be replaced with verification/pinning")
