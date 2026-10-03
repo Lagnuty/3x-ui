@@ -194,6 +194,7 @@
                         }}</a-radio-button>
                       <a-radio-button value="online">{{ i18n "online"
                         }}</a-radio-button>
+                      <a-radio-button value="deprecated">Deprecated</a-radio-button>
                     </a-radio-group>
                   </div>
                   <a-table :columns="isMobile ? mobileColumns : columns" :row-key="dbInbound => dbInbound.id"
@@ -212,6 +213,10 @@
                           <a-menu-item key="edit">
                             <a-icon type="edit"></a-icon>
                             {{ i18n "edit" }}
+                          </a-menu-item>
+                          <a-menu-item key="convertModern" v-if="dbInbound.isDeprecated">
+                            <a-icon type="safety-certificate"></a-icon>
+                            Convert to VLESS Reality/Vision
                           </a-menu-item>
                           <a-menu-item key="qrcode"
                             v-if="(dbInbound.isSS && !dbInbound.toInbound().isSSMultiUser) || dbInbound.isWireguard">
@@ -284,6 +289,17 @@
                     <template slot="protocol" slot-scope="text, dbInbound">
                       <div class="protocol-tags">
                         <a-tag color="purple">[[ dbInbound.protocol ]]</a-tag>
+                        <a-popover v-if="dbInbound.isDeprecated" title="Deprecated configuration"
+                          :overlay-class-name="themeSwitcher.currentTheme">
+                          <template slot="content">
+                            <div v-for="warning in dbInbound.getDeprecationWarnings()" :key="warning.code"
+                              :style="{ maxWidth: '360px', marginBottom: '8px' }">
+                              <strong>[[ warning.title ]]</strong><br>
+                              <span>[[ warning.recommendation ]]</span>
+                            </div>
+                          </template>
+                          <a-tag color="orange"><a-icon type="warning"></a-icon> deprecated</a-tag>
+                        </a-popover>
                         <a-tag v-if="dbInbound.isTun" color="cyan">TUN stats</a-tag>
                         <template
                           v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
@@ -662,6 +678,59 @@
       </a-spin>
     </a-layout-content>
   </a-layout>
+  <a-modal v-model="migrationWizard.visible" title="Convert to VLESS REALITY/Vision"
+    :confirm-loading="migrationWizard.loading" ok-text="Convert" cancel-text='{{ i18n "cancel" }}'
+    :class="themeSwitcher.currentTheme" :mask-closable="false" width="720px" @ok="convertDeprecatedInbound">
+    <a-alert type="warning" show-icon :style="{ marginBottom: '12px' }"
+      message="Review client impact before conversion"
+      :description="migrationWizard.credentialsRotate
+        ? 'Trojan/Shadowsocks credentials cannot be reused as VLESS UUIDs. New UUIDs will be generated and client links must be redistributed.'
+        : 'Existing UUIDs and quota metadata will be preserved. Client links still change because transport/security becomes REALITY/Vision.'">
+    </a-alert>
+    <a-form layout="vertical">
+      <a-form-item label="Migration mode">
+        <a-radio-group v-model="migrationWizard.mode" button-style="solid">
+          <a-radio-button value="clone">Clone (recommended)</a-radio-button>
+          <a-radio-button value="replace">Replace existing inbound</a-radio-button>
+        </a-radio-group>
+        <div v-if="migrationWizard.mode === 'clone'">The old inbound stays enabled; the new inbound receives a random port.</div>
+        <div v-else style="color: #fa8c16;">The existing inbound and its share links will be replaced.</div>
+      </a-form-item>
+      <a-row :gutter="12">
+        <a-col :span="12">
+          <a-form-item label="REALITY target">
+            <a-input v-model.trim="migrationWizard.target" placeholder="www.amazon.com:443"></a-input>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Server name (SNI)">
+            <a-input v-model.trim="migrationWizard.serverName" placeholder="www.amazon.com"></a-input>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Client compatibility">
+        <a-radio-group v-model="migrationWizard.profile">
+          <a-radio value="compatibility">Compatibility — no minimum client version</a-radio>
+          <a-radio value="strict">Strict modern — minimum 26.9.8</a-radio>
+        </a-radio-group>
+      </a-form-item>
+      <a-collapse :bordered="false">
+        <a-collapse-panel key="warnings" :header="`Detected warnings (${migrationWizard.warnings.length})`">
+          <a-list size="small" :data-source="migrationWizard.warnings">
+            <a-list-item slot="renderItem" slot-scope="warning">
+              <a-list-item-meta :title="warning.title" :description="warning.recommendation"></a-list-item-meta>
+            </a-list-item>
+          </a-list>
+        </a-collapse-panel>
+        <a-collapse-panel key="clients" :header="`Client mapping preview (${migrationWizard.clients.length})`">
+          <div v-for="client in migrationWizard.clients" :key="client.newId" style="word-break: break-all; margin-bottom: 6px;">
+            <a-tag>[[ client.email || 'unnamed' ]]</a-tag>
+            [[ client.oldCredential ]] → [[ client.newId ]]
+          </div>
+        </a-collapse-panel>
+      </a-collapse>
+    </a-form>
+  </a-modal>
 </a-layout>
 {{template "page/body_scripts" .}}
 <script src="{{ .base_path }}assets/qrcode/qrious2.min.js?{{ .cur_ver }}"></script>
@@ -1065,6 +1134,18 @@
       showAlert: false,
       ipLimitEnable: false,
       pageSize: 0,
+      migrationWizard: {
+        visible: false,
+        loading: false,
+        sourceId: null,
+        mode: 'clone',
+        profile: 'compatibility',
+        target: 'www.amazon.com:443',
+        serverName: 'www.amazon.com',
+        warnings: [],
+        clients: [],
+        credentialsRotate: false,
+      },
     },
     methods: {
       loading(spinning = true) {
@@ -1302,6 +1383,10 @@
         } else {
           this.searchedInbounds.splice(0, this.searchedInbounds.length);
           this.dbInbounds.forEach(inbound => {
+            if (this.filterBy === 'deprecated') {
+              if (inbound.isDeprecated) this.searchedInbounds.push(new DBInbound(inbound));
+              return;
+            }
             const newInbound = new DBInbound(inbound);
             const inboundSettings = JSON.parse(inbound.settings);
             if (this.clientCount[inbound.id] && this.clientCount[inbound.id].hasOwnProperty(this.filterBy)) {
@@ -1364,6 +1449,9 @@
             break;
           case "edit":
             this.openEditInbound(dbInbound.id);
+            break;
+          case "convertModern":
+            this.openMigrationWizard(dbInbound);
             break;
           case "addClient":
             this.openAddClient(dbInbound.id)
@@ -1460,6 +1548,125 @@
           },
           isEdit: true
         });
+      },
+      openMigrationWizard(dbInbound) {
+        const inbound = dbInbound.toInbound();
+        let sourceClients = Array.isArray(inbound.clients) ? inbound.clients : [];
+        if (sourceClients.length === 0 && dbInbound.protocol === Protocols.SHADOWSOCKS) {
+          sourceClients = [{
+            email: `migrated-${dbInbound.id}`,
+            password: inbound.settings?.password || 'single-user',
+            enable: true,
+          }];
+        }
+        const preserveUUID = [Protocols.VMESS, Protocols.VLESS].includes(dbInbound.protocol);
+        const credentialFor = client => client.id || client.password || client.email || 'generated';
+        this.migrationWizard = {
+          visible: true,
+          loading: false,
+          sourceId: dbInbound.id,
+          mode: 'clone',
+          profile: 'compatibility',
+          target: 'www.amazon.com:443',
+          serverName: 'www.amazon.com',
+          warnings: dbInbound.getDeprecationWarnings(),
+          clients: sourceClients.map(client => ({
+            source: client,
+            email: client.email
+              ? `${client.email}_${dbInbound.id}_${RandomUtil.randomLowerAndNum(4)}`
+              : `migrated-${dbInbound.id}-${RandomUtil.randomLowerAndNum(4)}`,
+            oldCredential: credentialFor(client),
+            newId: preserveUUID && client.id ? client.id : RandomUtil.randomUUID(),
+          })),
+          credentialsRotate: !preserveUUID,
+        };
+      },
+      buildModernVlessClient(mapping) {
+        const source = mapping.source || {};
+        const client = new Inbound.VLESSSettings.VLESS();
+        client.id = mapping.newId;
+        client.flow = TLS_FLOW_CONTROL.VISION;
+        client.reverseTag = source.reverseTag || '';
+        ['email', 'limitIp', 'totalGB', 'expiryTime', 'enable', 'tgId', 'subId', 'comment', 'reset', 'created_at', 'updated_at']
+          .forEach(key => {
+            if (source[key] !== undefined) client[key] = source[key];
+          });
+        client.email = this.migrationWizard.mode === 'clone'
+          ? mapping.email
+          : (source.email || `migrated-${RandomUtil.randomLowerAndNum(6)}`);
+        return client;
+      },
+      async convertDeprecatedInbound() {
+        const wizard = this.migrationWizard;
+        const dbInbound = this.dbInbounds.find(row => row.id === wizard.sourceId);
+        if (!dbInbound) return;
+        if (!/^[^\s:]+:\d{1,5}$/.test(wizard.target) || !wizard.serverName) {
+          this.$message.error('Enter a REALITY target as host:port and a server name');
+          return;
+        }
+
+        wizard.loading = true;
+        try {
+          const keyMsg = await HttpUtil.get('/panel/api/server/getNewX25519Cert');
+          if (!keyMsg.success) return;
+
+          const source = dbInbound.toInbound();
+          const clients = wizard.clients.map(mapping => this.buildModernVlessClient(mapping));
+          const settings = new Inbound.VLESSSettings(Protocols.VLESS, clients, 'none', 'none');
+          const stream = new StreamSettings();
+          stream.network = 'tcp';
+          stream.security = 'reality';
+          stream.reality.target = wizard.target;
+          stream.reality.serverNames = wizard.serverName;
+          stream.reality.privateKey = keyMsg.obj.privateKey;
+          stream.reality.settings.publicKey = keyMsg.obj.publicKey;
+          stream.reality.settings.fingerprint = UTLS_FINGERPRINT.UTLS_CHROME;
+          stream.reality.settings.serverName = wizard.serverName;
+          stream.reality.settings.supportX25519MLKEM768 = true;
+          stream.reality.minClientVer = wizard.profile === 'strict' ? '26.9.8' : '';
+
+          const converted = new Inbound(
+            wizard.mode === 'clone' ? RandomUtil.randomInteger(10000, 60000) : source.port,
+            source.listen,
+            Protocols.VLESS,
+            settings,
+            stream,
+            '',
+            source.sniffing,
+          );
+          const data = {
+            up: wizard.mode === 'clone' ? 0 : dbInbound.up,
+            down: wizard.mode === 'clone' ? 0 : dbInbound.down,
+            total: dbInbound.total,
+            remark: wizard.mode === 'clone' ? `${dbInbound.remark} - VLESS Reality` : dbInbound.remark,
+            enable: dbInbound.enable,
+            expiryTime: dbInbound.expiryTime,
+            trafficReset: dbInbound.trafficReset,
+            lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+            listen: converted.listen,
+            port: converted.port,
+            protocol: converted.protocol,
+            settings: converted.settings.toString(),
+            streamSettings: converted.stream.toString(),
+            sniffing: converted.sniffing.toString(),
+          };
+
+          let msg;
+          if (wizard.mode === 'clone') {
+            msg = await HttpUtil.post('/panel/api/inbounds/add', data);
+          } else {
+            const formData = new FormData();
+            Object.keys(data).forEach(key => formData.append(key, data[key]));
+            msg = await HttpUtil.post(`/panel/api/inbounds/update/${dbInbound.id}`, formData);
+          }
+          if (msg.success) {
+            wizard.visible = false;
+            this.$message.success('Converted to VLESS REALITY/Vision');
+            await this.getDBInbounds();
+          }
+        } finally {
+          wizard.loading = false;
+        }
       },
       async addInbound(inbound, dbInbound) {
         const data = {

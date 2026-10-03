@@ -67,6 +67,54 @@ class DBInbound {
         return this.protocol === Protocols.TUN;
     }
 
+    getDeprecationWarnings() {
+        let settings = {};
+        let stream = {};
+        try { settings = JSON.parse(this.settings || '{}'); } catch (_) {}
+        try { stream = JSON.parse(this.streamSettings || '{}'); } catch (_) {}
+        const warnings = [];
+        const add = (code, title, recommendation, severity = 'warning') => {
+            warnings.push({ code, title, recommendation, severity });
+        };
+
+        if (this.protocol === Protocols.VMESS) {
+            add('vmess', 'VMess is deprecated', 'Convert to VLESS REALITY with Vision flow.');
+        }
+        if (this.protocol === Protocols.TROJAN) {
+            const clients = Array.isArray(settings.clients) ? settings.clients : [];
+            if (clients.length === 0 || clients.some(client => !client.flow)) {
+                add('trojan-no-flow', 'Trojan without Flow is deprecated', 'Convert to VLESS REALITY/Vision. Client credentials will rotate.');
+            }
+        }
+        if (this.protocol === Protocols.VLESS) {
+            const clients = Array.isArray(settings.clients) ? settings.clients : [];
+            const withoutFlow = clients.filter(client => !client.flow).length;
+            if (withoutFlow > 0) {
+                add('vless-no-flow', `VLESS without Flow (${withoutFlow} client${withoutFlow === 1 ? '' : 's'})`, 'Enable xtls-rprx-vision on a TCP TLS/REALITY inbound.');
+            }
+        }
+        if (this.protocol === Protocols.SHADOWSOCKS) {
+            const methods = [settings.method, ...(settings.clients || []).map(client => client.method)].filter(Boolean);
+            if (methods.length === 0 || methods.some(method => !String(method).startsWith('2022-'))) {
+                add('shadowsocks-legacy', 'Legacy Shadowsocks cipher', 'Move to Shadowsocks 2022 or convert to VLESS REALITY/Vision.');
+            }
+        }
+
+        const hasLegacyAllowInsecure = value => {
+            if (!value || typeof value !== 'object') return false;
+            if (Object.prototype.hasOwnProperty.call(value, 'allowInsecure')) return true;
+            return Object.values(value).some(child => hasLegacyAllowInsecure(child));
+        };
+        if (hasLegacyAllowInsecure(settings) || hasLegacyAllowInsecure(stream)) {
+            add('allow-insecure', 'Legacy allowInsecure field', 'Remove allowInsecure and configure certificate pinning or name verification.', 'error');
+        }
+        return warnings;
+    }
+
+    get isDeprecated() {
+        return this.getDeprecationWarnings().length > 0;
+    }
+
     get address() {
         let address = location.hostname;
         if (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0") {
