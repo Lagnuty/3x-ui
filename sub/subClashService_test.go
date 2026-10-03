@@ -28,7 +28,7 @@ func TestApplyRealitySecurityAllowsExplicitLegacyOptOut(t *testing.T) {
 	proxy := map[string]any{"type": "vless"}
 	stream := map[string]any{
 		"realitySettings": map[string]any{
-			"publicKey":               "public",
+			"publicKey":             "public",
 			"supportX25519MLKEM768": false,
 		},
 	}
@@ -48,7 +48,7 @@ func TestTLSDataPreservesVerificationOverrides(t *testing.T) {
 	got := service.tlsData(map[string]any{
 		"serverName": "example.com",
 		"settings": map[string]any{
-			"verifyPeerCertByName":  "verify.example.com",
+			"verifyPeerCertByName": "verify.example.com",
 			"pinnedPeerCertSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 	})
@@ -58,5 +58,27 @@ func TestTLSDataPreservesVerificationOverrides(t *testing.T) {
 	}
 	if got["pinnedPeerCertSha256"] == "" {
 		t.Fatal("pinnedPeerCertSha256 was not preserved")
+	}
+}
+
+func TestApplyTransportExportsMihomoXHTTPOptions(t *testing.T) {
+	proxy := map[string]any{}
+	stream := map[string]any{"xhttpSettings": map[string]any{
+		"path":               "/api",
+		"mode":               "packet-up",
+		"sessionIDPlacement": "cookie",
+		"xPaddingBytes":      "80-600",
+		"headers":            map[string]any{"User-Agent": "custom"},
+	}}
+	service := &SubClashService{}
+	if !service.applyTransport(proxy, "xhttp", stream) {
+		t.Fatal("xhttp transport was rejected")
+	}
+	if proxy["network"] != "xhttp" {
+		t.Fatalf("network = %v", proxy["network"])
+	}
+	opts := proxy["xhttp-opts"].(map[string]any)
+	if opts["session-id-placement"] != "cookie" || opts["x-padding-bytes"] != "80-600" {
+		t.Fatalf("xhttp-opts = %#v", opts)
 	}
 }

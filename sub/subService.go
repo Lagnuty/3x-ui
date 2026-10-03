@@ -1452,7 +1452,8 @@ func normalizedFinalMaskTCPMasks(value any) []any {
 
 func hasCompleteFinalMaskXMCSettings(settings map[string]any) bool {
 	for _, key := range []string{"profile", "texture", "signature"} {
-		if strings.TrimSpace(fmt.Sprint(settings[key])) == "" {
+		value, exists := settings[key]
+		if !exists || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
 			return false
 		}
 	}

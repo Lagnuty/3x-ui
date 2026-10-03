@@ -369,8 +369,47 @@ func (s *SubClashService) applyTransport(proxy map[string]any, network string, s
 			proxy["grpc-opts"] = grpcOpts
 		}
 		return true
+	case "xhttp":
+		proxy["network"] = "xhttp"
+		xhttp, _ := stream["xhttpSettings"].(map[string]any)
+		opts := map[string]any{}
+		copyClashXHTTPString(opts, xhttp, "path", "path")
+		copyClashXHTTPString(opts, xhttp, "host", "host")
+		copyClashXHTTPString(opts, xhttp, "mode", "mode")
+		copyClashXHTTPString(opts, xhttp, "xPaddingBytes", "x-padding-bytes")
+		copyClashXHTTPString(opts, xhttp, "xPaddingKey", "x-padding-key")
+		copyClashXHTTPString(opts, xhttp, "xPaddingHeader", "x-padding-header")
+		copyClashXHTTPString(opts, xhttp, "xPaddingPlacement", "x-padding-placement")
+		copyClashXHTTPString(opts, xhttp, "xPaddingMethod", "x-padding-method")
+		copyClashXHTTPString(opts, xhttp, "sessionIDPlacement", "session-id-placement")
+		copyClashXHTTPString(opts, xhttp, "sessionIDKey", "session-id-key")
+		copyClashXHTTPString(opts, xhttp, "sessionIDTable", "session-id-table")
+		copyClashXHTTPString(opts, xhttp, "uplinkDataPlacement", "uplink-data-placement")
+		copyClashXHTTPString(opts, xhttp, "uplinkDataKey", "uplink-data-key")
+		copyClashXHTTPString(opts, xhttp, "uplinkHTTPMethod", "uplink-http-method")
+		if headers, ok := nonEmptyShareObject(xhttp["headers"]); ok {
+			opts["headers"] = headers
+		}
+		for source, target := range map[string]string{
+			"xPaddingObfsMode": "x-padding-obfs-mode",
+			"noGRPCHeader":     "no-grpc-header",
+		} {
+			if value, ok := xhttp[source].(bool); ok {
+				opts[target] = value
+			}
+		}
+		if len(opts) > 0 {
+			proxy["xhttp-opts"] = opts
+		}
+		return true
 	default:
 		return false
+	}
+}
+
+func copyClashXHTTPString(dst, src map[string]any, source, target string) {
+	if value, ok := src[source].(string); ok && value != "" {
+		dst[target] = value
 	}
 }
 

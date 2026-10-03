@@ -178,7 +178,16 @@ func (a *SUBController) subs(c *gin.Context) {
 func (a *SUBController) subJsons(c *gin.Context) {
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
-	jsonSub, header, err := a.subJsonService.GetJson(subId, host)
+	format := strings.ToLower(strings.TrimSpace(c.Query("format")))
+	var jsonSub, header string
+	var err error
+	if format == "sing-box" || format == "singbox" {
+		jsonSub, header, err = a.subJsonService.GetSingBox(subId, host, c.Query("version"))
+		c.Header("X-Subscription-Format", "sing-box")
+	} else {
+		jsonSub, header, err = a.subJsonService.GetJson(subId, host)
+		c.Header("X-Subscription-Format", "xray")
+	}
 	if err != nil || len(jsonSub) == 0 {
 		c.String(400, "Error!")
 	} else {
