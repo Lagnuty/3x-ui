@@ -726,7 +726,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		{Version: "v26.6.27", Title: "Protocol/config validation", Impact: "Revalidate generated inbound and outbound configuration."},
 		{Version: "v26.7.28", Title: "REALITY client compatibility", Impact: "Review minClientVer and fingerprint compatibility."},
 		{Version: "v26.9.8", Title: "REALITY ML-KEM transition", Impact: "X25519MLKEM768 is required before optional X25519; empty minClientVer means no minimum."},
-		{Version: "v26.9.30", Title: "Deprecated feature diagnostics", Impact: "VMess, no-Flow configurations, legacy Shadowsocks and allowInsecure need migration."},
+		{Version: "v26.9.9", Title: "Deprecated feature diagnostics", Impact: "VMess, no-Flow configurations, legacy Shadowsocks and allowInsecure need migration."},
 	}
 	for i := range checkpoints {
 		checkpoints[i].Active = target >= xrayVersionNumber(checkpoints[i].Version)
@@ -775,7 +775,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		} else if hasReverse && target >= 26_006_022 {
 			reasons = append(reasons, "VLESS reverse should be tunnel-tested after the core switch")
 		}
-		if target >= 26_009_030 {
+		if target >= 26_009_009 {
 			switch string(inbound.Protocol) {
 			case "vmess":
 				reasons = append(reasons, "VMess is deprecated")

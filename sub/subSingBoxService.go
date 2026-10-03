@@ -208,7 +208,7 @@ func copySingBoxXHTTP(dst, src map[string]any, version string) {
 			dst[target] = value
 		}
 	}
-	modern := compareRelease(version, 26, 9, 8) >= 0 || strings.TrimSpace(version) == ""
+	modern := compareRelease(version, 26, 6, 22) >= 0 || strings.TrimSpace(version) == ""
 	for _, field := range []string{"Placement", "Key", "Table", "Length"} {
 		source := "sessionID" + field
 		targetPrefix := "session_id_"

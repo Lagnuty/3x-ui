@@ -30,7 +30,9 @@ func TestParseMLKEM768OutputRejectsTruncatedKey(t *testing.T) {
 }
 
 func TestValidateMLKEM768SeedRejectsInvalidBase64(t *testing.T) {
-	err := validateMLKEM768Value("seed", "not-base64", 64)
+	// '-' is valid in unpadded base64url, so use a character rejected by both
+	// base64url and standard base64 encodings.
+	err := validateMLKEM768Value("seed", "not*base64", 64)
 	if err == nil || !strings.Contains(err.Error(), "not valid base64") {
 		t.Fatalf("validateMLKEM768Value() error = %v, want base64 error", err)
 	}

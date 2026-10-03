@@ -9,7 +9,7 @@ func TestSingBoxXHTTPUsesVersionAwareSessionNames(t *testing.T) {
 		"xPaddingBytes":      "80-600",
 	}
 	legacy := map[string]any{}
-	copySingBoxXHTTP(legacy, settings, "26.6.27")
+	copySingBoxXHTTP(legacy, settings, "26.6.1")
 	if legacy["session_placement"] != "path" {
 		t.Fatalf("legacy xhttp = %#v", legacy)
 	}
@@ -18,7 +18,7 @@ func TestSingBoxXHTTPUsesVersionAwareSessionNames(t *testing.T) {
 	}
 
 	modern := map[string]any{}
-	copySingBoxXHTTP(modern, settings, "26.9.8")
+	copySingBoxXHTTP(modern, settings, "26.6.22")
 	if modern["session_id_placement"] != "cookie" {
 		t.Fatalf("modern xhttp = %#v", modern)
 	}

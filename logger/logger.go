@@ -20,7 +20,9 @@ const (
 )
 
 var (
-	logger  *logging.Logger
+	// Keep logging safe for package-level diagnostics and tests that run before
+	// the application wires its console/file backends.
+	logger  = logging.MustGetLogger("x-ui")
 	logFile *os.File
 
 	// logBuffer maintains recent log entries in memory for web UI retrieval
