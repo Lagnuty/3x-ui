@@ -279,9 +279,6 @@ func (s *SubClashService) buildHysteriaProxy(inbound *model.Inbound, client mode
 			}
 		}
 		if inner, ok := tlsSettings["settings"].(map[string]any); ok {
-			if insecure, ok := inner["allowInsecure"].(bool); ok && insecure {
-				proxy["skip-cert-verify"] = true
-			}
 			if fp, ok := inner["fingerprint"].(string); ok && fp != "" {
 				proxy["client-fingerprint"] = fp
 			}

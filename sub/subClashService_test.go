@@ -61,6 +61,22 @@ func TestTLSDataPreservesVerificationOverrides(t *testing.T) {
 	}
 }
 
+func TestClashTLSNeverDisablesCertificateVerification(t *testing.T) {
+	proxy := map[string]any{}
+	stream := map[string]any{
+		"tlsSettings": map[string]any{
+			"settings": map[string]any{"allowInsecure": true},
+		},
+	}
+	service := &SubClashService{}
+	if !service.applySecurity(proxy, "tls", stream) {
+		t.Fatal("TLS settings were rejected")
+	}
+	if _, exists := proxy["skip-cert-verify"]; exists {
+		t.Fatalf("deprecated allowInsecure leaked into Mihomo output: %#v", proxy)
+	}
+}
+
 func TestApplyTransportExportsMihomoXHTTPOptions(t *testing.T) {
 	proxy := map[string]any{}
 	stream := map[string]any{"xhttpSettings": map[string]any{
