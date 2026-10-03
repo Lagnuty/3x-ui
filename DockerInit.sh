@@ -1,33 +1,39 @@
 #!/bin/sh
-case $1 in
-    amd64)
+set -eu
+
+TARGET_ARCH="${1:-amd64}"
+TARGET_VARIANT="${2:-}"
+XRAY_VERSION="${3:-v26.9.30}"
+
+case "${TARGET_ARCH}/${TARGET_VARIANT}" in
+    amd64/)
         ARCH="64"
         FNAME="amd64"
         ;;
-    i386)
+    386/ | i386/)
         ARCH="32"
         FNAME="i386"
         ;;
-    armv8 | arm64 | aarch64)
+    arm64/* | armv8/* | aarch64/*)
         ARCH="arm64-v8a"
         FNAME="arm64"
         ;;
-    armv7 | arm | arm32)
-        ARCH="arm32-v7a"
-        FNAME="arm32"
-        ;;
-    armv6)
+    arm/v6 | armv6/*)
         ARCH="arm32-v6"
         FNAME="armv6"
         ;;
+    arm/v7 | arm/ | armv7/* | arm32/*)
+        ARCH="arm32-v7a"
+        FNAME="arm32"
+        ;;
     *)
-        ARCH="64"
-        FNAME="amd64"
+        echo "Unsupported Docker target architecture: ${TARGET_ARCH}/${TARGET_VARIANT}" >&2
+        exit 1
         ;;
 esac
 mkdir -p build/bin
 cd build/bin
-curl -sfLRO "https://github.com/XTLS/Xray-core/releases/download/v26.4.25/Xray-linux-${ARCH}.zip"
+curl -sfLRO "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${ARCH}.zip"
 unzip "Xray-linux-${ARCH}.zip"
 rm -f "Xray-linux-${ARCH}.zip" geoip.dat geosite.dat
 mv xray "xray-linux-${FNAME}"
