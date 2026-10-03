@@ -90,6 +90,22 @@ func TestBuildXhttpExtraIncludesXMUXAndSkipsOldDefaults(t *testing.T) {
 	}
 }
 
+func TestBuildXhttpExtraIncludesHeaders(t *testing.T) {
+	headers := map[string]any{
+		"User-Agent": "Pinned browser identity",
+		"X-Trace":    "outbound",
+	}
+	extra := buildXhttpExtra(map[string]any{"headers": headers})
+
+	got, ok := extra["headers"].(map[string]any)
+	if !ok {
+		t.Fatalf("headers = %#v, want a non-empty map", extra["headers"])
+	}
+	if got["User-Agent"] != "Pinned browser identity" || got["X-Trace"] != "outbound" {
+		t.Fatalf("headers were not preserved: %#v", got)
+	}
+}
+
 func TestExtractKcpShareFieldsFinalMaskLegacy(t *testing.T) {
 	fields := extractKcpShareFields(map[string]any{
 		"finalmask": map[string]any{

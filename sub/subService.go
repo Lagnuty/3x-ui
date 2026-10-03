@@ -1017,6 +1017,9 @@ func buildXhttpExtra(xhttp map[string]any) map[string]any {
 	if v, ok := xhttp["noGRPCHeader"].(bool); ok && v {
 		extra["noGRPCHeader"] = v
 	}
+	if v, ok := nonEmptyShareObject(xhttp["headers"]); ok {
+		extra["headers"] = v
+	}
 	for _, field := range []string{"xmux", "downloadSettings"} {
 		if v, ok := nonEmptyShareObject(xhttp[field]); ok {
 			extra[field] = v

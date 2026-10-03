@@ -459,6 +459,27 @@
             <a-form-item label='{{ i18n "path" }}'>
               <a-input v-model.trim="outbound.stream.tcp.path"></a-input>
             </a-form-item>
+            <a-alert type="info" show-icon
+              message="With all request headers empty, Xray generates its current Chrome User-Agent. RAW HTTP replaces the complete default header set when Host or a custom header is configured, so set User-Agent explicitly in that case if required."
+              style="margin-bottom: 12px"></a-alert>
+            <a-form-item label="User-Agent override">
+              <a-input v-model.trim="outbound.stream.tcp.userAgent"
+                placeholder="Empty: dynamic Chrome UA from Xray core"></a-input>
+            </a-form-item>
+            <a-form-item label="HTTP headers">
+              <a-button icon="plus" size="small" @click="outbound.stream.tcp.addHeader('', '')"></a-button>
+            </a-form-item>
+            <a-form-item :wrapper-col="{span:24}">
+              <a-input-group compact v-for="(header, index) in outbound.stream.tcp.headers" :key="index">
+                <a-input :style="{ width: '50%' }" v-model.trim="header.name" placeholder="Header name">
+                  <template slot="addonBefore">[[ index+1 ]]</template>
+                </a-input>
+                <a-input :style="{ width: '50%' }" v-model.trim="header.value" placeholder="Header value">
+                  <a-button icon="minus" slot="addonAfter" size="small"
+                    @click="outbound.stream.tcp.removeHeader(index)"></a-button>
+                </a-input>
+              </a-input-group>
+            </a-form-item>
           </template>
         </template>
 
@@ -527,6 +548,27 @@
           </a-form-item>
           <a-form-item label='{{ i18n "path" }}'>
             <a-input v-model.trim="outbound.stream.xhttp.path"></a-input>
+          </a-form-item>
+          <a-alert type="info" show-icon
+            message="Leave User-Agent empty to let Xray generate its current Chrome User-Agent automatically. Custom headers override core defaults."
+            style="margin-bottom: 12px"></a-alert>
+          <a-form-item label="User-Agent override">
+            <a-input v-model.trim="outbound.stream.xhttp.userAgent"
+              placeholder="Empty: dynamic Chrome UA from Xray core"></a-input>
+          </a-form-item>
+          <a-form-item label="HTTP headers">
+            <a-button icon="plus" size="small" @click="outbound.stream.xhttp.addHeader('', '')"></a-button>
+          </a-form-item>
+          <a-form-item :wrapper-col="{span:24}">
+            <a-input-group compact v-for="(header, index) in outbound.stream.xhttp.headers" :key="index">
+              <a-input :style="{ width: '50%' }" v-model.trim="header.name" placeholder="Header name">
+                <template slot="addonBefore">[[ index+1 ]]</template>
+              </a-input>
+              <a-input :style="{ width: '50%' }" v-model.trim="header.value" placeholder="Header value">
+                <a-button icon="minus" slot="addonAfter" size="small"
+                  @click="outbound.stream.xhttp.removeHeader(index)"></a-button>
+              </a-input>
+            </a-input-group>
           </a-form-item>
           <a-form-item label="Mode">
             <a-select v-model="outbound.stream.xhttp.mode" :dropdown-class-name="themeSwitcher.currentTheme">

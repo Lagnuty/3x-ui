@@ -198,6 +198,32 @@ class CommonClass {
         return new CommonClass();
     }
 
+    static toHeaders(v2Headers) {
+        const headers = [];
+        if (!v2Headers) return headers;
+        Object.keys(v2Headers).forEach(name => {
+            const values = Array.isArray(v2Headers[name]) ? v2Headers[name] : [v2Headers[name]];
+            values.forEach(value => headers.push({ name: name, value: value }));
+        });
+        return headers;
+    }
+
+    static toV2Headers(headers, arrayValues = false) {
+        const result = {};
+        (headers || []).forEach(header => {
+            const name = (header.name || '').trim();
+            const value = (header.value || '').trim();
+            if (!name || !value) return;
+            if (arrayValues) {
+                if (!result[name]) result[name] = [];
+                result[name].push(value);
+            } else {
+                result[name] = value;
+            }
+        });
+        return result;
+    }
+
     toJson() {
         return this;
     }
@@ -208,34 +234,51 @@ class CommonClass {
 }
 
 class TcpStreamSettings extends CommonClass {
-    constructor(type = 'none', host, path) {
+    constructor(type = 'none', host = '', path = '', userAgent = '', headers = []) {
         super();
         this.type = type;
         this.host = host;
         this.path = path;
+        this.userAgent = userAgent;
+        this.headers = headers;
+    }
+
+    addHeader(name = '', value = '') {
+        this.headers.push({ name: name, value: value });
+    }
+
+    removeHeader(index) {
+        this.headers.splice(index, 1);
     }
 
     static fromJson(json = {}) {
         let header = json.header;
         if (!header) return new TcpStreamSettings();
         if (header.type == 'http' && header.request) {
+            const requestHeaders = CommonClass.toHeaders(header.request.headers);
+            const hostHeaders = requestHeaders.filter(header => header.name.toLowerCase() === 'host');
+            const userAgentHeader = requestHeaders.find(header => header.name.toLowerCase() === 'user-agent');
             return new TcpStreamSettings(
                 header.type,
-                header.request.headers.Host.join(','),
-                header.request.path.join(','),
+                hostHeaders.map(header => header.value).join(','),
+                (header.request.path || ['/']).join(','),
+                userAgentHeader?.value || '',
+                requestHeaders.filter(header => !['host', 'user-agent'].includes(header.name.toLowerCase())),
             );
         }
         return new TcpStreamSettings(header.type, '', '');
     }
 
     toJson() {
+        const customHeaders = this.headers.filter(header => !['host', 'user-agent'].includes((header.name || '').toLowerCase()));
+        const headers = CommonClass.toV2Headers(customHeaders, true);
+        if (!ObjectUtil.isEmpty(this.host)) headers.Host = this.host.split(',');
+        if (!ObjectUtil.isEmpty(this.userAgent)) headers['User-Agent'] = [this.userAgent];
         return {
             header: {
                 type: this.type,
                 request: this.type === 'http' ? {
-                    headers: {
-                        Host: ObjectUtil.isEmpty(this.host) ? [] : this.host.split(',')
-                    },
+                    headers: headers,
                     path: ObjectUtil.isEmpty(this.path) ? ["/"] : this.path.split(',')
                 } : undefined,
             }
@@ -384,6 +427,8 @@ class xHTTPStreamSettings extends CommonClass {
         sessionIDTable = '',
         sessionIDLength = '',
         xmux = undefined,
+        userAgent = '',
+        headers = [],
     ) {
         super();
         this.path = path;
@@ -397,9 +442,21 @@ class xHTTPStreamSettings extends CommonClass {
         this.sessionIDLength = sessionIDLength;
         this.enableXmux = xmux != null && Object.keys(xmux).length > 0;
         this.xmux = this.enableXmux ? { ...xHTTPDefaultXmux(), ...xmux } : xHTTPDefaultXmux();
+        this.userAgent = userAgent;
+        this.headers = headers;
+    }
+
+    addHeader(name = '', value = '') {
+        this.headers.push({ name: name, value: value });
+    }
+
+    removeHeader(index) {
+        this.headers.splice(index, 1);
     }
 
     static fromJson(json = {}) {
+        const headers = CommonClass.toHeaders(json.headers);
+        const userAgentHeader = headers.find(header => header.name.toLowerCase() === 'user-agent');
         return new xHTTPStreamSettings(
             json.path,
             json.host,
@@ -410,14 +467,20 @@ class xHTTPStreamSettings extends CommonClass {
             json.sessionIDKey ?? json.sessionKey,
             json.sessionIDTable,
             json.sessionIDLength,
-            json.xmux
+            json.xmux,
+            userAgentHeader?.value || '',
+            headers.filter(header => header.name.toLowerCase() !== 'user-agent'),
         );
     }
 
     toJson() {
+        const customHeaders = this.headers.filter(header => (header.name || '').toLowerCase() !== 'user-agent');
+        const headers = CommonClass.toV2Headers(customHeaders);
+        if (!ObjectUtil.isEmpty(this.userAgent)) headers['User-Agent'] = this.userAgent;
         return {
             path: this.path,
             host: this.host,
+            headers: headers,
             mode: this.mode,
             noGRPCHeader: this.noGRPCHeader,
             scMinPostsIntervalMs: this.scMinPostsIntervalMs,
@@ -1267,16 +1330,20 @@ class Outbound extends CommonClass {
         } else if (network === 'httpupgrade') {
             stream.httpupgrade = new HttpUpgradeStreamSettings(json.path, json.host);
         } else if (network === 'xhttp') {
-            // xHTTPStreamSettings positional args are (path, host, headers, ..., mode);
-            // passing `json.mode` as the 3rd argument used to land in the `headers`
-            // slot, dropping the mode on the floor. Build the object and set mode
-            // explicitly to avoid that.
+            // Build explicitly so optional link fields remain independent from
+            // the evolving xHTTP settings constructor.
             const xh = new xHTTPStreamSettings(json.path, json.host);
             if (json.mode) xh.mode = json.mode;
             if (json.sessionIDPlacement || json.sessionPlacement) xh.sessionIDPlacement = json.sessionIDPlacement ?? json.sessionPlacement;
             if (json.sessionIDKey || json.sessionKey) xh.sessionIDKey = json.sessionIDKey ?? json.sessionKey;
             if (json.sessionIDTable) xh.sessionIDTable = json.sessionIDTable;
             if (json.sessionIDLength) xh.sessionIDLength = json.sessionIDLength;
+            if (json.headers && typeof json.headers === 'object') {
+                const headers = CommonClass.toHeaders(json.headers);
+                const userAgentHeader = headers.find(header => header.name.toLowerCase() === 'user-agent');
+                xh.userAgent = userAgentHeader?.value || '';
+                xh.headers = headers.filter(header => header.name.toLowerCase() !== 'user-agent');
+            }
             stream.xhttp = xh;
         }
 
@@ -1334,9 +1401,8 @@ class Outbound extends CommonClass {
         } else if (type === 'httpupgrade') {
             stream.httpupgrade = new HttpUpgradeStreamSettings(path, host);
         } else if (type === 'xhttp') {
-            // Same positional bug as in the VMess-JSON branch above:
-            // passing `mode` as the 3rd positional arg put it into the
-            // `headers` slot. Build explicitly instead.
+            // Build explicitly so optional link fields remain independent from
+            // the evolving xHTTP settings constructor.
             const xh = new xHTTPStreamSettings(path, host);
             if (mode) xh.mode = mode;
             const xpb = url.searchParams.get('x_padding_bytes');
@@ -1361,6 +1427,12 @@ class Outbound extends CommonClass {
                     if (extra.xmux && typeof extra.xmux === 'object') {
                         xh.enableXmux = true;
                         xh.xmux = { ...xHTTPDefaultXmux(), ...extra.xmux };
+                    }
+                    if (extra.headers && typeof extra.headers === 'object') {
+                        const headers = CommonClass.toHeaders(extra.headers);
+                        const userAgentHeader = headers.find(header => header.name.toLowerCase() === 'user-agent');
+                        xh.userAgent = userAgentHeader?.value || '';
+                        xh.headers = headers.filter(header => header.name.toLowerCase() !== 'user-agent');
                     }
                     if (typeof extra.sessionPlacement === 'string' && extra.sessionPlacement) xh.sessionIDPlacement = extra.sessionPlacement;
                     if (typeof extra.sessionKey === 'string' && extra.sessionKey) xh.sessionIDKey = extra.sessionKey;
