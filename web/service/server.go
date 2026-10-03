@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +38,8 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
 )
+
+var leafCertSHA256Pattern = regexp.MustCompile(`(?im)Cert's leaf SHA256:\s*([0-9a-f]{64})\s*$`)
 
 // ProcessState represents the current state of a system process.
 type ProcessState string
@@ -1253,6 +1257,50 @@ func (s *ServerService) GetNewEchCert(sni string) (any, error) {
 		"echServerKeys": serverKeys,
 		"echConfigList": configList,
 	}, nil
+}
+
+func (s *ServerService) GetPeerCertSHA256(target string) (string, error) {
+	target, err := validateTLSPingTarget(target)
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, xray.GetBinaryPath(), "tls", "ping", target).CombinedOutput()
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("xray tls ping timed out: %w", ctx.Err())
+	}
+	if err != nil {
+		return "", fmt.Errorf("xray tls ping failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return parseLeafCertSHA256(string(out))
+}
+
+func validateTLSPingTarget(target string) (string, error) {
+	target = strings.TrimSpace(target)
+	if target == "" || strings.HasPrefix(target, "-") || strings.ContainsAny(target, " /\\?#\t\r\n") {
+		return "", fmt.Errorf("invalid TLS target %q; use host or host:port", target)
+	}
+	parsed, err := url.Parse("tls://" + target)
+	if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.Path != "" {
+		return "", fmt.Errorf("invalid TLS target %q; use host or host:port", target)
+	}
+	if port := parsed.Port(); port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return "", fmt.Errorf("invalid TLS target port %q", port)
+		}
+	}
+	return target, nil
+}
+
+func parseLeafCertSHA256(output string) (string, error) {
+	matches := leafCertSHA256Pattern.FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("xray tls ping did not return a leaf certificate SHA256")
+	}
+	return strings.ToLower(matches[len(matches)-1][1]), nil
 }
 
 func (s *ServerService) GetNewVlessEnc() (any, error) {

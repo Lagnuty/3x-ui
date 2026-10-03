@@ -273,6 +273,12 @@ func (s *SubJsonService) tlsData(tData map[string]any) map[string]any {
 	if fingerprint, ok := tlsClientSettings["fingerprint"].(string); ok {
 		tlsData["fingerprint"] = fingerprint
 	}
+	if verifyName, ok := tlsClientSettings["verifyPeerCertByName"].(string); ok {
+		tlsData["verifyPeerCertByName"] = verifyName
+	}
+	if pins, ok := tlsClientSettings["pinnedPeerCertSha256"]; ok {
+		tlsData["pinnedPeerCertSha256"] = pins
+	}
 	return tlsData
 }
 

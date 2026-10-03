@@ -1091,13 +1091,24 @@
             <a-input v-model.trim="outbound.stream.tls.echConfigList"></a-input>
           </a-form-item>
           <a-form-item label="verify Peer Cert By Name">
-            <a-input v-model.trim="outbound.stream.tls.verifyPeerCertByName" placeholder="cloudflare-dns.com"></a-input>
+            <a-input v-model.trim="outbound.stream.tls.verifyPeerCertByName"
+              placeholder="cloudflare-dns.com,alt.example.com"></a-input>
           </a-form-item>
-          <a-form-item label=" pinned Peer Cert Sha256">
-            <a-input v-model.trim="outbound.stream.tls.pinnedPeerCertSha256"
-              placeholder="Enter SHA256 fingerprints (base64)">
+          <a-form-item label="Pinned Peer Cert SHA256"
+            :validate-status="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? 'success' : 'error'"
+            :help="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? '' : 'Use one or more 64-character hex SHA256 values separated by commas'">
+            <a-input v-model.trim="outbound.stream.tls.pinnedPeerCertSha256" @change="outModal.check()"
+              placeholder="64 hex characters; comma-separated">
             </a-input>
           </a-form-item>
+          <a-form-item label="Leaf certificate target">
+            <a-input v-model.trim="outModal.tlsPinTarget" placeholder="example.com or example.com:443">
+              <a-button slot="addonAfter" icon="safety-certificate" @click="getTlsLeafSha256">Fetch SHA256</a-button>
+            </a-input>
+          </a-form-item>
+          <a-alert class="mb-12" type="warning" show-icon
+            message="allowInsecure is removed in current Xray cores. Pin the leaf certificate, or combine a CA pin with ServerName/Verify Peer Cert By Name. Re-fetch leaf pins after certificate rotation.">
+          </a-alert>
         </template>
 
         <!-- reality settings -->

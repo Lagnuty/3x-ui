@@ -139,6 +139,17 @@ function normalizeRealityMinClientVer(value) {
     return normalized === '26.3.27' ? '' : normalized;
 }
 
+function normalizeTLSPins(value) {
+    return (value ?? '').toString().split(',')
+        .map(pin => pin.trim().replace(/:/g, '').toLowerCase())
+        .filter(Boolean).join(',');
+}
+
+function isValidTLSPins(value) {
+    const normalized = normalizeTLSPins(value);
+    return normalized === '' || normalized.split(',').every(pin => /^[0-9a-f]{64}$/.test(pin));
+}
+
 class XrayCommonClass {
 
     static toJsonArray(arr) {
@@ -768,7 +779,12 @@ class TlsStreamSettings extends XrayCommonClass {
         }
 
         if (!ObjectUtil.isEmpty(json.settings)) {
-            settings = new TlsStreamSettings.Settings(json.settings.fingerprint, json.settings.echConfigList);
+            settings = new TlsStreamSettings.Settings(
+                json.settings.fingerprint,
+                json.settings.echConfigList,
+                json.settings.verifyPeerCertByName,
+                json.settings.pinnedPeerCertSha256,
+            );
         }
         return new TlsStreamSettings(
             json.serverName,
@@ -871,21 +887,29 @@ TlsStreamSettings.Settings = class extends XrayCommonClass {
     constructor(
         fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
         echConfigList = '',
+        verifyPeerCertByName = '',
+        pinnedPeerCertSha256 = '',
     ) {
         super();
         this.fingerprint = fingerprint;
         this.echConfigList = echConfigList;
+        this.verifyPeerCertByName = verifyPeerCertByName;
+        this.pinnedPeerCertSha256 = normalizeTLSPins(pinnedPeerCertSha256);
     }
     static fromJson(json = {}) {
         return new TlsStreamSettings.Settings(
             json.fingerprint,
             json.echConfigList,
+            json.verifyPeerCertByName,
+            json.pinnedPeerCertSha256,
         );
     }
     toJson() {
         return {
             fingerprint: this.fingerprint,
-            echConfigList: this.echConfigList
+            echConfigList: this.echConfigList,
+            verifyPeerCertByName: this.verifyPeerCertByName,
+            pinnedPeerCertSha256: normalizeTLSPins(this.pinnedPeerCertSha256)
         };
     }
 };
@@ -1581,6 +1605,26 @@ class Inbound extends XrayCommonClass {
         return this.clientStats;
     }
 
+    static applyTLSVerificationToParams(tls, params) {
+        if (!tls?.settings || !params) return;
+        if (tls.settings.verifyPeerCertByName?.length > 0) {
+            params.set("vcn", tls.settings.verifyPeerCertByName);
+        }
+        if (tls.settings.pinnedPeerCertSha256?.length > 0) {
+            params.set("pcs", tls.settings.pinnedPeerCertSha256);
+        }
+    }
+
+    static applyTLSVerificationToObj(tls, obj) {
+        if (!tls?.settings || !obj) return;
+        if (tls.settings.verifyPeerCertByName?.length > 0) {
+            obj.vcn = tls.settings.verifyPeerCertByName;
+        }
+        if (tls.settings.pinnedPeerCertSha256?.length > 0) {
+            obj.pcs = tls.settings.pinnedPeerCertSha256;
+        }
+    }
+
     // Copy the xPadding* settings into the query-string of a vless/trojan/ss
     // link. Without this, the admin's custom xPaddingBytes range and (in
     // obfs mode) the custom xPaddingKey / xPaddingHeader / placement /
@@ -1949,6 +1993,7 @@ class Inbound extends XrayCommonClass {
             if (this.stream.tls.alpn.length > 0) {
                 obj.alpn = this.stream.tls.alpn.join(',');
             }
+            Inbound.applyTLSVerificationToObj(this.stream.tls, obj);
         }
 
         return 'vmess://' + Base64.encode(JSON.stringify(obj, null, 2));
@@ -2023,6 +2068,7 @@ class Inbound extends XrayCommonClass {
                 if (type == "tcp" && !ObjectUtil.isEmpty(flow)) {
                     params.set("flow", flow);
                 }
+                Inbound.applyTLSVerificationToParams(this.stream.tls, params);
             }
         }
 
@@ -2125,6 +2171,7 @@ class Inbound extends XrayCommonClass {
                 if (!ObjectUtil.isEmpty(this.stream.tls.sni)) {
                     params.set("sni", this.stream.tls.sni);
                 }
+                Inbound.applyTLSVerificationToParams(this.stream.tls, params);
             }
         }
 
@@ -2206,6 +2253,7 @@ class Inbound extends XrayCommonClass {
                 if (!ObjectUtil.isEmpty(this.stream.tls.sni)) {
                     params.set("sni", this.stream.tls.sni);
                 }
+                Inbound.applyTLSVerificationToParams(this.stream.tls, params);
             }
         }
 
@@ -2248,7 +2296,7 @@ class Inbound extends XrayCommonClass {
         params.set("security", "tls");
         if (this.stream.tls.settings.fingerprint?.length > 0) params.set("fp", this.stream.tls.settings.fingerprint);
         if (this.stream.tls.alpn?.length > 0) params.set("alpn", this.stream.tls.alpn);
-        if (this.stream.tls.settings.allowInsecure) params.set("insecure", "1");
+        Inbound.applyTLSVerificationToParams(this.stream.tls, params);
         if (this.stream.tls.settings.echConfigList?.length > 0) params.set("ech", this.stream.tls.settings.echConfigList);
         if (this.stream.tls.sni?.length > 0) params.set("sni", this.stream.tls.sni);
 

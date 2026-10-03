@@ -99,6 +99,17 @@ const Address_Port_Strategy = {
 
 const DNSRuleActions = ['direct', 'drop', 'reject', 'hijack'];
 
+function normalizePinnedPeerCertSha256(value) {
+    return (value ?? '').toString().split(',')
+        .map(pin => pin.trim().replace(/:/g, '').toLowerCase())
+        .filter(Boolean).join(',');
+}
+
+function isValidPinnedPeerCertSha256(value) {
+    const normalized = normalizePinnedPeerCertSha256(value);
+    return normalized === '' || normalized.split(',').every(pin => /^[0-9a-f]{64}$/.test(pin));
+}
+
 function normalizeDNSRuleField(value) {
     if (value === null || value === undefined) {
         return '';
@@ -441,7 +452,7 @@ class TlsStreamSettings extends CommonClass {
         this.fingerprint = fingerprint;
         this.echConfigList = echConfigList;
         this.verifyPeerCertByName = verifyPeerCertByName;
-        this.pinnedPeerCertSha256 = pinnedPeerCertSha256;
+        this.pinnedPeerCertSha256 = normalizePinnedPeerCertSha256(pinnedPeerCertSha256);
     }
 
     static fromJson(json = {}) {
@@ -462,7 +473,7 @@ class TlsStreamSettings extends CommonClass {
             fingerprint: this.fingerprint,
             echConfigList: this.echConfigList,
             verifyPeerCertByName: this.verifyPeerCertByName,
-            pinnedPeerCertSha256: this.pinnedPeerCertSha256
+            pinnedPeerCertSha256: normalizePinnedPeerCertSha256(this.pinnedPeerCertSha256)
         };
     }
 }

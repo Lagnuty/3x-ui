@@ -20,6 +20,7 @@
         duplicateTag: false,
         isValid: true,
         activeKey: '1',
+        tlsPinTarget: '',
         tags: [],
         ok() {
             ObjectUtil.execute(outModal.confirm, outModal.outbound.toJson());
@@ -40,6 +41,7 @@
             this.activeKey = '1';
             this.visible = true;
             this.outbound = isEdit ? Outbound.fromJson(outbound) : new Outbound();
+            this.tlsPinTarget = this.outbound.stream.tls.serverName || '';
             this.isEdit = isEdit;
             this.tags = tags;
             this.check()
@@ -52,13 +54,11 @@
             outModal.confirmLoading = loading;
         },
         check() {
-            if (outModal.outbound.tag == '' || outModal.tags.includes(outModal.outbound.tag)) {
-                this.duplicateTag = true;
-                this.isValid = false;
-            } else {
-                this.duplicateTag = false;
-                this.isValid = true;
-            }
+            const invalidTag = outModal.outbound.tag == '' || outModal.tags.includes(outModal.outbound.tag);
+            const invalidPin = outModal.outbound.stream.isTls &&
+                !isValidPinnedPeerCertSha256(outModal.outbound.stream.tls.pinnedPeerCertSha256);
+            this.duplicateTag = invalidTag;
+            this.isValid = !invalidTag && !invalidPin;
         },
         toggleJson(jsonTab) {
             textAreaObj = document.getElementById('outboundJson');
@@ -125,6 +125,23 @@
                 } else {
                     this.$message.error('Wrong Link!');
                     outModal.link = '';
+                }
+            },
+            isValidTLSPin(value) {
+                return isValidPinnedPeerCertSha256(value);
+            },
+            async getTlsLeafSha256() {
+                const target = this.outModal.tlsPinTarget.trim();
+                if (!target) {
+                    this.$message.warning('Enter a TLS pin target first');
+                    return;
+                }
+                outModal.loading(true);
+                const msg = await HttpUtil.post('/panel/api/server/getPeerCertSha256', { target });
+                outModal.loading(false);
+                if (msg.success) {
+                    this.outbound.stream.tls.pinnedPeerCertSha256 = msg.obj.sha256;
+                    this.outModal.check();
                 }
             },
         },

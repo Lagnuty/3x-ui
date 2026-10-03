@@ -428,9 +428,14 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 		if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
 			params["fp"], _ = fpValue.(string)
 		}
-		if insecure, ok := searchKey(tlsSettings, "allowInsecure"); ok {
-			if insecure.(bool) {
-				params["insecure"] = "1"
+		if verifyName, ok := searchKey(tlsSettings, "verifyPeerCertByName"); ok {
+			if value := strings.TrimSpace(fmt.Sprint(verifyName)); value != "" {
+				params["vcn"] = value
+			}
+		}
+		if pins, ok := searchKey(tlsSettings, "pinnedPeerCertSha256"); ok {
+			if value := joinAnyStrings(pins); value != "" {
+				params["pcs"] = value
 			}
 		}
 	}

@@ -377,6 +377,22 @@
                 this.inbound.stream.tls.echServerKeys = "";
                 this.inbound.stream.tls.settings.echConfigList = "";
             },
+            isValidTLSPins(value) {
+                return isValidTLSPins(value);
+            },
+            async getTlsLeafSha256() {
+                const target = this.inbound.stream.tls.sni.trim();
+                if (!target) {
+                    this.$message.warning("Enter the TLS SNI/host first");
+                    return;
+                }
+                inModal.loading(true);
+                const msg = await HttpUtil.post("/panel/api/server/getPeerCertSha256", { target });
+                inModal.loading(false);
+                if (msg.success) {
+                    this.inbound.stream.tls.settings.pinnedPeerCertSha256 = msg.obj.sha256;
+                }
+            },
             async getNewVlessEnc() {
                 const selected = inModal.inbound.settings.selectedAuth;
                 if (!selected) {

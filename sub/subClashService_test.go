@@ -42,3 +42,21 @@ func TestApplyRealitySecurityAllowsExplicitLegacyOptOut(t *testing.T) {
 		t.Fatalf("reality-opts = %#v, ML-KEM flag should be omitted after explicit opt-out", opts)
 	}
 }
+
+func TestTLSDataPreservesVerificationOverrides(t *testing.T) {
+	service := &SubClashService{}
+	got := service.tlsData(map[string]any{
+		"serverName": "example.com",
+		"settings": map[string]any{
+			"verifyPeerCertByName":  "verify.example.com",
+			"pinnedPeerCertSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+	})
+
+	if got["verifyPeerCertByName"] != "verify.example.com" {
+		t.Fatalf("verifyPeerCertByName = %v", got["verifyPeerCertByName"])
+	}
+	if got["pinnedPeerCertSha256"] == "" {
+		t.Fatal("pinnedPeerCertSha256 was not preserved")
+	}
+}

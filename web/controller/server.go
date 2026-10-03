@@ -64,6 +64,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/importDB", a.importDB)
 	g.POST("/getNewEchCert", a.getNewEchCert)
 	g.POST("/getNewmlkem768", a.getNewmlkem768)
+	g.POST("/getPeerCertSha256", a.getPeerCertSHA256)
 }
 
 // refreshStatus updates the cached server status and collects CPU history.
@@ -349,6 +350,22 @@ func (a *ServerController) getNewEchCert(c *gin.Context) {
 		return
 	}
 	jsonObj(c, cert, nil)
+}
+
+func (a *ServerController) getPeerCertSHA256(c *gin.Context) {
+	var request struct {
+		Target string `json:"target"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		jsonMsg(c, "Invalid TLS pin request", err)
+		return
+	}
+	hash, err := a.serverService.GetPeerCertSHA256(request.Target)
+	if err != nil {
+		jsonMsg(c, "Failed to obtain leaf certificate SHA256", err)
+		return
+	}
+	jsonObj(c, map[string]string{"sha256": hash}, nil)
 }
 
 // getNewVlessEnc generates a new VLESS encryption key.

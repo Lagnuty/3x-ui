@@ -47,6 +47,22 @@
           ]]</a-select-option>
       </a-select>
     </a-form-item>
+    <a-divider orientation="left">Client TLS verification</a-divider>
+    <a-alert class="mb-12" type="info" show-icon
+      message="These client-side fields are exported to subscription profiles and are not added to the inbound server config. allowInsecure is deprecated; use a leaf certificate pin and optional verification name.">
+    </a-alert>
+    <a-form-item label="Verify Peer Cert By Name">
+      <a-input v-model.trim="inbound.stream.tls.settings.verifyPeerCertByName"
+        placeholder="example.com,alt.example.com"></a-input>
+    </a-form-item>
+    <a-form-item label="Pinned Peer Cert SHA256"
+      :validate-status="isValidTLSPins(inbound.stream.tls.settings.pinnedPeerCertSha256) ? 'success' : 'error'"
+      :help="isValidTLSPins(inbound.stream.tls.settings.pinnedPeerCertSha256) ? '' : 'Use one or more 64-character hex SHA256 values separated by commas'">
+      <a-input v-model.trim="inbound.stream.tls.settings.pinnedPeerCertSha256"
+        placeholder="64 hex characters; comma-separated">
+        <a-button slot="addonAfter" icon="safety-certificate" @click="getTlsLeafSha256"></a-button>
+      </a-input>
+    </a-form-item>
     <a-form-item label="ALPN">
       <a-select mode="multiple" :dropdown-class-name="themeSwitcher.currentTheme" v-model="inbound.stream.tls.alpn">
         <a-select-option v-for="alpn in ALPN_OPTION" :value="alpn">[[ alpn
