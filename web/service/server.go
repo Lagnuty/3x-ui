@@ -741,6 +741,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		{Version: "v26.7.28", Title: "REALITY client compatibility", Impact: "Review minClientVer and fingerprint compatibility."},
 		{Version: "v26.9.8", Title: "REALITY ML-KEM transition", Impact: "X25519MLKEM768 is required before optional X25519; empty minClientVer means no minimum."},
 		{Version: "v26.9.9", Title: "Deprecated feature diagnostics", Impact: "VMess, no-Flow configurations, legacy Shadowsocks and allowInsecure need migration."},
+		{Version: "v26.9.30", Title: "gRPC reconnect behavior", Impact: "A reported v26.9.30 regression can prevent gRPC outbounds reconnecting after the peer restarts; prefer XHTTP stream-up or tunnel-test gRPC."},
 	}
 	for i := range checkpoints {
 		checkpoints[i].Active = target >= xrayVersionNumber(checkpoints[i].Version)
@@ -765,6 +766,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		_ = json.Unmarshal([]byte(inbound.Settings), &settings)
 		_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
 		security, _ := stream["security"].(string)
+		network, _ := stream["network"].(string)
 		isReality := security == "reality"
 		if isReality {
 			hasReality = true
@@ -808,6 +810,9 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 				}
 			}
 		}
+		if target >= 26_009_030 && network == "grpc" {
+			reasons = append(reasons, "v26.9.30 has a reported gRPC reconnect regression; prefer XHTTP stream-up or test peer restarts")
+		}
 		if target >= 26_004_025 && (containsLegacyAllowInsecure(settings) || containsLegacyAllowInsecure(stream)) {
 			reasons = append(reasons, "legacy allowInsecure must be replaced with verification/pinning")
 		}
@@ -822,6 +827,9 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 	}
 	if target >= 26_005_000 && target < 26_006_022 {
 		plan.Warnings = append(plan.Warnings, "This target is in the v26.5.x/v26.6.1 VLESS reverse regression range; v26.4.25 or v26.6.22+ is recommended.")
+	}
+	if target >= 26_009_030 {
+		plan.Warnings = append(plan.Warnings, "Xray v26.9.30 has a reported gRPC outbound reconnect regression after connection loss; test server restarts before production rollout.")
 	}
 
 	generated, generateErr := s.xrayService.GetXrayConfig()

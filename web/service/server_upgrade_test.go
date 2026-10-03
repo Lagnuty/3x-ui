@@ -7,6 +7,7 @@ func TestXrayVersionNumber(t *testing.T) {
 		"v26.4.25": 26_004_025,
 		"26.9.8":   26_009_008,
 		"v26.9.9":  26_009_009,
+		"v26.9.30": 26_009_030,
 		"invalid":  0,
 	}
 	for input, want := range tests {
