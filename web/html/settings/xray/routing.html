@@ -1,5 +1,47 @@
 {{define "settings/xray/routing"}}
 <a-space direction="vertical" size="middle" class="routing-modern">
+    <a-card size="small" title="Domain matcher & geodata diagnostics" class="domain-matcher-card">
+        <a-row :gutter="[12, 12]">
+            <a-col :xs="24" :md="8">
+                <div class="domain-matcher-label">Matcher / cache mode</div>
+                <a-select :value="domainMatcherDiagnostics.mode" disabled style="width: 100%">
+                    <a-select-option value="auto-mph">Auto — MPH (core-managed)</a-select-option>
+                </a-select>
+                <div class="domain-matcher-help">[[ domainMatcherDiagnostics.cacheMode ]] · [[ domainMatcherDiagnostics.lifecycle ]]</div>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <div class="domain-matcher-label">Startup</div>
+                <a-space>
+                    <a-tag :color="!domainMatcherDiagnostics.running ? 'red' : (domainMatcherDiagnostics.startup.ready ? 'green' : 'orange')">
+                        [[ !domainMatcherDiagnostics.running ? 'stopped' : (domainMatcherDiagnostics.startup.ready ? 'ready' : 'starting') ]]
+                    </a-tag>
+                    <span>[[ formatStartupDuration(domainMatcherDiagnostics.startup.startupDurationMs) ]]</span>
+                    <span>HIT [[ domainMatcherDiagnostics.startup.cacheHits ]] / MISS [[ domainMatcherDiagnostics.startup.cacheMisses ]]</span>
+                </a-space>
+                <div class="domain-matcher-help">Xray [[ domainMatcherDiagnostics.version || 'Unknown' ]] · HIT/MISS counters require debug logging.</div>
+            </a-col>
+            <a-col :xs="24" :md="8">
+                <div class="domain-matcher-label">Cache maintenance</div>
+                <a-button icon="reload" :loading="domainMatcherRebuilding" @click="rebuildDomainMatcherCache">
+                    Clear & rebuild cache
+                </a-button>
+                <div class="domain-matcher-help">Restarts Xray; the current cache is process-local.</div>
+            </a-col>
+        </a-row>
+        <a-divider style="margin: 12px 0"></a-divider>
+        <a-row :gutter="[12, 8]">
+            <a-col :xs="24" :md="12" v-for="asset in ['geosite', 'geoip']" :key="asset">
+                <a-alert :type="geoAsset(asset).error ? 'error' : 'success'" show-icon
+                    :message="asset + '.dat — ' + (geoAsset(asset).error || formatGeoSize(geoAsset(asset).size))"
+                    :description="geoAsset(asset).path"></a-alert>
+            </a-col>
+        </a-row>
+        <a-alert v-if="domainMatcherDiagnostics.slowStart" type="warning" show-icon
+            message="Slow Xray startup detected (3 seconds or more). Check cache MISS counts, geo file size/storage latency, and geodata errors."
+            style="margin-top: 12px"></a-alert>
+        <a-alert v-for="(error, index) in domainMatcherDiagnostics.startup.geoErrors" :key="'geo-error-' + index"
+            type="error" show-icon :message="error" style="margin-top: 8px"></a-alert>
+    </a-card>
     <a-button type="primary" icon="plus" @click="addRule">{{ i18n
         "pages.xray.rules.add" }}</a-button>
     <a-table-sortable :columns="isMobile ? rulesMobileColumns : rulesColumns"

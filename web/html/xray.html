@@ -286,6 +286,18 @@
       saveBtnDisable: true,
       refreshing: false,
       restartResult: '',
+      domainMatcherRebuilding: false,
+      domainMatcherDiagnostics: {
+        mode: 'auto-mph',
+        cacheMode: 'shared in-memory weak cache',
+        lifecycle: 'cleared and rebuilt when Xray restarts',
+        version: 'Unknown',
+        running: false,
+        slowStart: false,
+        startup: { ready: false, startupDurationMs: 0, cacheHits: 0, cacheMisses: 0, geoErrors: [] },
+        geosite: { path: '', exists: false, size: 0, error: '' },
+        geoip: { path: '', exists: false, size: 0, error: '' },
+      },
       showAlert: false,
       customGeoAliasLabelSuffix: '{{ i18n "pages.index.customGeoAliasLabelSuffix" }}',
       advSettings: 'xraySetting',
@@ -584,6 +596,7 @@
         if (msg.success) {
           await PromiseUtil.sleep(500);
           await this.getXrayResult();
+          await this.getDomainMatcherDiagnostics();
         }
         this.loading(false);
       },
@@ -593,6 +606,35 @@
           this.restartResult = msg.obj;
           if (msg.obj.length > 1) Vue.prototype.$message.error(msg.obj);
         }
+      },
+      async getDomainMatcherDiagnostics() {
+        const msg = await HttpUtil.get('/panel/api/server/domainMatcherDiagnostics');
+        if (msg.success && msg.obj) this.domainMatcherDiagnostics = msg.obj;
+      },
+      async rebuildDomainMatcherCache() {
+        this.domainMatcherRebuilding = true;
+        const msg = await HttpUtil.post('/panel/api/server/rebuildDomainMatcherCache');
+        if (msg.success) {
+          Vue.prototype.$message.success(msg.msg);
+          await PromiseUtil.sleep(1000);
+          await this.getDomainMatcherDiagnostics();
+          await this.getXrayResult();
+        } else {
+          Vue.prototype.$message.error(msg.msg);
+        }
+        this.domainMatcherRebuilding = false;
+      },
+      geoAsset(name) {
+        return this.domainMatcherDiagnostics[name] || { path: '', size: 0, error: 'not checked' };
+      },
+      formatGeoSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+      },
+      formatStartupDuration(ms) {
+        if (!Number.isFinite(ms)) return 'unknown';
+        return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
       },
       async resetXrayConfigToDefault() {
         this.loading(true);
@@ -1247,6 +1289,7 @@
       await this.getXraySetting();
       await this.loadCustomGeoAliases();
       await this.getXrayResult();
+      await this.getDomainMatcherDiagnostics();
       await this.getOutboundsTraffic();
 
       if (window.wsClient) {
@@ -2129,6 +2172,21 @@
      a routing criterion (Source / Network / Destination / Inbound) and
      shows its values as labelled pills. */
   .xray-page .routing-modern { width: 100%; }
+  .xray-page .domain-matcher-card { width: 100%; }
+  .xray-page .domain-matcher-label {
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    opacity: 0.72;
+  }
+  .xray-page .domain-matcher-help {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    opacity: 0.62;
+  }
   .xray-page .routing-table .ant-table {
     background: transparent;
     border-radius: 14px;

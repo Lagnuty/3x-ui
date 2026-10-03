@@ -104,6 +104,29 @@ type Release struct {
 	TagName string `json:"tag_name"` // The tag name of the release
 }
 
+// GeoFileDiagnostic describes an Xray geodata asset on disk.
+type GeoFileDiagnostic struct {
+	Path       string    `json:"path"`
+	Exists     bool      `json:"exists"`
+	Size       int64     `json:"size"`
+	ModifiedAt time.Time `json:"modifiedAt"`
+	Error      string    `json:"error,omitempty"`
+}
+
+// DomainMatcherDiagnostics exposes the core-managed MPH cache state without
+// writing legacy domainMatcher fields into the Xray JSON configuration.
+type DomainMatcherDiagnostics struct {
+	Mode       string                  `json:"mode"`
+	CacheMode  string                  `json:"cacheMode"`
+	Lifecycle  string                  `json:"lifecycle"`
+	Version    string                  `json:"version"`
+	Running    bool                    `json:"running"`
+	SlowStart  bool                    `json:"slowStart"`
+	Startup    xray.StartupDiagnostics `json:"startup"`
+	Geosite    GeoFileDiagnostic       `json:"geosite"`
+	GeoIP      GeoFileDiagnostic       `json:"geoip"`
+}
+
 // ServerService provides business logic for server monitoring and management.
 // It handles system status collection, IP detection, and application statistics.
 type ServerService struct {
@@ -120,6 +143,44 @@ type ServerService struct {
 	cpuHistory         []CPUSample
 	cachedCpuSpeedMhz  float64
 	lastCpuInfoAttempt time.Time
+}
+
+func inspectGeoFile(path string) GeoFileDiagnostic {
+	result := GeoFileDiagnostic{Path: path}
+	info, err := os.Stat(path)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	if info.IsDir() {
+		result.Error = "path is a directory"
+		return result
+	}
+	result.Exists = true
+	result.Size = info.Size()
+	result.ModifiedAt = info.ModTime()
+	if result.Size == 0 {
+		result.Error = "file is empty"
+	}
+	return result
+}
+
+// GetDomainMatcherDiagnostics reports the automatic matcher mode, geodata
+// assets, and startup cache activity of the current Xray process.
+func (s *ServerService) GetDomainMatcherDiagnostics() DomainMatcherDiagnostics {
+	startup := s.xrayService.GetStartupDiagnostics()
+	running := s.xrayService.IsXrayRunning()
+	return DomainMatcherDiagnostics{
+		Mode:      "auto-mph",
+		CacheMode: "shared in-memory weak cache",
+		Lifecycle: "cleared and rebuilt when Xray restarts",
+		Version:   s.xrayService.GetXrayVersion(),
+		Running:   running,
+		SlowStart: (running || startup.Ready) && startup.StartupDurationMs >= 3000,
+		Startup:   startup,
+		Geosite:   inspectGeoFile(xray.GetGeositePath()),
+		GeoIP:     inspectGeoFile(xray.GetGeoipPath()),
+	}
 }
 
 // AggregateCpuHistory returns up to maxPoints averaged buckets of size bucketSeconds over recent data.

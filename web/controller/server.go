@@ -46,6 +46,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getXrayVersion", a.getXrayVersion)
 	g.GET("/getPanelUpdateInfo", a.getPanelUpdateInfo)
 	g.GET("/getConfigJson", a.getConfigJson)
+	g.GET("/domainMatcherDiagnostics", a.getDomainMatcherDiagnostics)
 	g.GET("/getDb", a.getDb)
 	g.GET("/getNewUUID", a.getNewUUID)
 	g.GET("/getNewX25519Cert", a.getNewX25519Cert)
@@ -55,6 +56,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 
 	g.POST("/stopXrayService", a.stopXrayService)
 	g.POST("/restartXrayService", a.restartXrayService)
+	g.POST("/rebuildDomainMatcherCache", a.rebuildDomainMatcherCache)
 	g.POST("/installXray/:version", a.installXray)
 	g.POST("/updatePanel", a.updatePanel)
 	g.POST("/updateGeofile", a.updateGeofile)
@@ -206,6 +208,21 @@ func (a *ServerController) restartXrayService(c *gin.Context) {
 		"Xray service has been restarted successfully",
 		"success",
 	)
+}
+
+func (a *ServerController) getDomainMatcherDiagnostics(c *gin.Context) {
+	jsonObj(c, a.serverService.GetDomainMatcherDiagnostics(), nil)
+}
+
+// rebuildDomainMatcherCache clears the process-local cache by restarting Xray.
+// Current Xray versions rebuild and share MPH matchers automatically.
+func (a *ServerController) rebuildDomainMatcherCache(c *gin.Context) {
+	err := a.serverService.RestartXrayService()
+	if err != nil {
+		jsonMsg(c, "Failed to rebuild the domain matcher cache", err)
+		return
+	}
+	jsonMsg(c, "Domain matcher cache cleared; Xray is rebuilding it", nil)
 }
 
 // getLogs retrieves the application logs based on count, level, and syslog filters.

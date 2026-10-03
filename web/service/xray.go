@@ -84,6 +84,14 @@ func (s *XrayService) GetXrayVersion() string {
 	return p.GetVersion()
 }
 
+// GetStartupDiagnostics returns diagnostics collected from the running Xray process.
+func (s *XrayService) GetStartupDiagnostics() xray.StartupDiagnostics {
+	if p == nil {
+		return xray.StartupDiagnostics{}
+	}
+	return p.GetStartupDiagnostics()
+}
+
 // RemoveIndex removes an element at the specified index from a slice.
 // Returns a new slice with the element removed.
 func RemoveIndex(s []any, index int) []any {

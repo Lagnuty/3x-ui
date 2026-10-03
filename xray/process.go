@@ -169,10 +169,11 @@ func (p *process) GetErr() error {
 
 // GetResult returns the last log line or error from the Xray process.
 func (p *process) GetResult() string {
-	if len(p.logWriter.lastLine) == 0 && p.exitErr != nil {
+	lastLine := p.logWriter.LastLine()
+	if len(lastLine) == 0 && p.exitErr != nil {
 		return p.exitErr.Error()
 	}
-	return p.logWriter.lastLine
+	return lastLine
 }
 
 // GetVersion returns the version string of the Xray process.
@@ -203,6 +204,11 @@ func (p *Process) SetOnlineClients(users []string) {
 // GetUptime returns the uptime of the Xray process in seconds.
 func (p *Process) GetUptime() uint64 {
 	return uint64(time.Since(p.startTime).Seconds())
+}
+
+// GetStartupDiagnostics returns matcher cache and geodata signals observed for this process.
+func (p *Process) GetStartupDiagnostics() StartupDiagnostics {
+	return p.logWriter.Snapshot()
 }
 
 // refreshAPIPort updates the API port from the inbound configs.
@@ -265,6 +271,8 @@ func (p *process) Start() (err error) {
 
 	cmd := exec.Command(GetBinaryPath(), "-c", configPath)
 	p.cmd = cmd
+	p.startTime = time.Now()
+	p.logWriter.ResetStartup(p.startTime)
 
 	cmd.Stdout = p.logWriter
 	cmd.Stderr = p.logWriter
