@@ -1,8 +1,6 @@
 services:
   3xui:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+    image: ghcr.io/lagnuty/3x-ui:2.9.4-21
     container_name: 3xui_app
     # hostname: yourhostname <- optional
     volumes:

@@ -272,6 +272,19 @@ Windows они не запускаются; Docker/Ubuntu builder содержи
 8. Перегенерировать Mihomo/sing-box подписки и проверить предупреждения
    конкретного формата.
 
+## Готовый Docker-образ
+
+Multi-arch образ публикуется в GitHub Container Registry:
+
+```text
+ghcr.io/lagnuty/3x-ui:2.9.4-21
+```
+
+Поддерживаемые платформы: `linux/amd64`, `linux/arm64`, `linux/arm/v7` и
+`linux/386`. В образ встроен Xray v26.9.30. На сервере достаточно выполнить
+`docker pull`; локальная сборка проекта не требуется. Готовые команды запуска
+приведены в `README.ru_RU.md`.
+
 ## Известные ограничения
 
 - Raw `vless://` не передаёт Mihomo-флаг ML-KEM.

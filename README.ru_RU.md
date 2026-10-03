@@ -33,6 +33,52 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 
 Полную документацию смотрите в [вики проекта](https://github.com/MHSanaei/3x-ui/wiki).
 
+## Готовый Docker-образ 2.9.4+21
+
+Образ уже собирается в GitHub Actions, поэтому на Ubuntu-сервере компилятор и
+исходный код не нужны:
+
+```bash
+docker pull ghcr.io/lagnuty/3x-ui:2.9.4-21
+```
+
+Запуск с host networking, постоянной базой и сертификатами:
+
+```bash
+mkdir -p ./db ./cert
+docker run -d \
+  --name 3xui_app \
+  --restart unless-stopped \
+  --network host \
+  -e XRAY_VMESS_AEAD_FORCED=false \
+  -e XUI_ENABLE_FAIL2BAN=true \
+  -v "$PWD/db:/etc/x-ui" \
+  -v "$PWD/cert:/root/cert" \
+  ghcr.io/lagnuty/3x-ui:2.9.4-21
+```
+
+Для TUN дополнительно передайте устройство и capabilities:
+
+```bash
+  --device /dev/net/tun \
+  --cap-add NET_ADMIN \
+  --cap-add NET_RAW
+```
+
+В приложенном `docker-compose.yml` уже указан готовый образ. Достаточно
+выполнить:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Теги образа:
+
+- `2.9.4-21` — точная неизменяемая версия панели `2.9.4+21`;
+- `2.9.4` — актуальная сборка линии 2.9.4;
+- `latest` — последняя опубликованная сборка этой ветки.
+
 ## Особая благодарность
 
 - [alireza0](https://github.com/alireza0/)
