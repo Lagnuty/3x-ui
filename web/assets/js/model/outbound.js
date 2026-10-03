@@ -470,7 +470,7 @@ class TlsStreamSettings extends CommonClass {
 class RealityStreamSettings extends CommonClass {
     constructor(
         publicKey = '',
-        fingerprint = '',
+        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
         serverName = '',
         shortId = '',
         spiderX = '',

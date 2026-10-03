@@ -27,5 +27,8 @@
       </template>
     </a-input>
   </a-input-group>
+  <a-alert v-if="externalProxy && inbound.stream.isReality" :style="{ marginTop: '8px' }" type="info" show-icon
+    message="Security = Same preserves REALITY SNI, public key, fingerprint and PQ compatibility overrides. Forcing TLS or None intentionally drops those REALITY-only fields.">
+  </a-alert>
 </a-form>
 {{end}}

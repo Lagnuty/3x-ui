@@ -131,6 +131,14 @@ Object.freeze(TCP_CONGESTION_OPTION);
 Object.freeze(USERS_SECURITY);
 Object.freeze(MODE_OPTION);
 
+function normalizeRealityMinClientVer(value) {
+    const normalized = (value ?? '').toString().trim();
+    // Xray v26.7.11 temporarily used this as an implicit minimum. Treat an
+    // explicitly persisted copy as the legacy default when loading the form;
+    // administrators can select the strict preset if they want a real floor.
+    return normalized === '26.3.27' ? '' : normalized;
+}
+
 class XrayCommonClass {
 
     static toJsonArray(arr) {
@@ -911,7 +919,7 @@ class RealityStreamSettings extends XrayCommonClass {
         this.target = target;
         this.serverNames = Array.isArray(serverNames) ? serverNames.join(",") : serverNames;
         this.privateKey = privateKey;
-        this.minClientVer = minClientVer;
+        this.minClientVer = normalizeRealityMinClientVer(minClientVer);
         this.maxClientVer = maxClientVer;
         this.maxTimediff = maxTimediff;
         this.shortIds = Array.isArray(shortIds) ? shortIds.join(",") : shortIds;
@@ -928,6 +936,7 @@ class RealityStreamSettings extends XrayCommonClass {
                 json.settings.serverName,
                 json.settings.spiderX,
                 json.settings.mldsa65Verify,
+                json.settings.supportX25519MLKEM768,
             );
         }
         return new RealityStreamSettings(
@@ -968,7 +977,8 @@ RealityStreamSettings.Settings = class extends XrayCommonClass {
         fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
         serverName = '',
         spiderX = '/',
-        mldsa65Verify = ''
+        mldsa65Verify = '',
+        supportX25519MLKEM768 = true
     ) {
         super();
         this.publicKey = publicKey;
@@ -976,6 +986,7 @@ RealityStreamSettings.Settings = class extends XrayCommonClass {
         this.serverName = serverName;
         this.spiderX = spiderX;
         this.mldsa65Verify = mldsa65Verify;
+        this.supportX25519MLKEM768 = supportX25519MLKEM768 !== false;
     }
     static fromJson(json = {}) {
         return new RealityStreamSettings.Settings(
@@ -983,7 +994,8 @@ RealityStreamSettings.Settings = class extends XrayCommonClass {
             json.fingerprint,
             json.serverName,
             json.spiderX,
-            json.mldsa65Verify
+            json.mldsa65Verify,
+            json.supportX25519MLKEM768
         );
     }
     toJson() {
@@ -992,7 +1004,8 @@ RealityStreamSettings.Settings = class extends XrayCommonClass {
             fingerprint: this.fingerprint,
             serverName: this.serverName,
             spiderX: this.spiderX,
-            mldsa65Verify: this.mldsa65Verify
+            mldsa65Verify: this.mldsa65Verify,
+            supportX25519MLKEM768: this.supportX25519MLKEM768
         };
     }
 };

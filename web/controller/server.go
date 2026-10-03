@@ -63,6 +63,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/xraylogs/:count", a.getXrayLogs)
 	g.POST("/importDB", a.importDB)
 	g.POST("/getNewEchCert", a.getNewEchCert)
+	g.POST("/getNewmlkem768", a.getNewmlkem768)
 }
 
 // refreshStatus updates the cached server status and collects CPU history.
@@ -373,7 +374,18 @@ func (a *ServerController) getNewUUID(c *gin.Context) {
 
 // getNewmlkem768 generates a new ML-KEM-768 key.
 func (a *ServerController) getNewmlkem768(c *gin.Context) {
-	out, err := a.serverService.GetNewmlkem768()
+	seed := c.Query("seed")
+	if c.Request.Method == http.MethodPost {
+		var request struct {
+			Seed string `json:"seed"`
+		}
+		if err := c.ShouldBindJSON(&request); err != nil {
+			jsonMsg(c, "Invalid mlkem768 request", err)
+			return
+		}
+		seed = request.Seed
+	}
+	out, err := a.serverService.GetNewmlkem768(seed)
 	if err != nil {
 		jsonMsg(c, "Failed to generate mlkem768 keys", err)
 		return

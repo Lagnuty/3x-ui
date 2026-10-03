@@ -12,6 +12,8 @@
             <a-select-option v-for="key in UTLS_FINGERPRINT" :value="key">[[ key ]]</a-select-option>
         </a-select>
     </a-form-item>
+    <a-alert class="mb-12" :type="inbound.stream.reality.settings.fingerprint === 'chrome' ? 'info' : 'warning'"
+        :message="realityFingerprintHint()" show-icon></a-alert>
     <a-form-item>
         <template slot="label">
             <a-tooltip>
@@ -36,8 +38,13 @@
         <a-input-number v-model.number="inbound.stream.reality.maxTimediff" :min="0"></a-input-number>
     </a-form-item>
     <a-form-item label='Min Client Ver'>
-        <a-input v-model.trim="inbound.stream.reality.minClientVer" placeholder='25.9.11'></a-input>
+        <a-input v-model.trim="inbound.stream.reality.minClientVer" placeholder='empty = no minimum'></a-input>
+        <a-space :style="{ marginTop: '8px' }">
+            <a-button size="small" @click="setRealityMinClientPreset('strict')">Strict modern clients (26.9.8+)</a-button>
+            <a-button size="small" @click="setRealityMinClientPreset('compatibility')">Compatibility (empty)</a-button>
+        </a-space>
     </a-form-item>
+    <a-alert class="mb-12" :type="realityMinVersionHintType()" :message="realityMinVersionHint()" show-icon></a-alert>
     <a-form-item label='Max Client Ver'>
         <a-input v-model.trim="inbound.stream.reality.maxClientVer" placeholder='25.9.11'></a-input>
     </a-form-item>
@@ -65,6 +72,27 @@
         <a-space>
             <a-button type="primary" icon="import" @click="getNewX25519Cert">Get New Cert</a-button>
             <a-button danger @click="clearX25519Cert">Clear</a-button>
+        </a-space>
+    </a-form-item>
+    <a-divider orientation="left">PQ / ML-KEM compatibility</a-divider>
+    <a-form-item label="X25519MLKEM768">
+        <a-switch v-model="inbound.stream.reality.settings.supportX25519MLKEM768"></a-switch>
+        <span class="ml-10">Export Mihomo compatibility flag</span>
+    </a-form-item>
+    <a-alert class="mb-12" type="warning" show-icon
+        message="Xray v26.9.8+ requires X25519MLKEM768 before optional X25519. Mihomo/Clash YAML exports support-x25519mlkem768: true when enabled. Raw vless:// links cannot carry this flag; Shadowrocket and older clients may remain incompatible.">
+    </a-alert>
+    <a-form-item label="ML-KEM-768 Seed">
+        <a-textarea v-model.trim="inModal.mlkem768Tool.seed" placeholder="VLESS Encryption diagnostic key; not a REALITY static key"></a-textarea>
+    </a-form-item>
+    <a-form-item label="ML-KEM-768 Client">
+        <a-textarea v-model.trim="inModal.mlkem768Tool.client" readonly></a-textarea>
+    </a-form-item>
+    <a-form-item label=" ">
+        <a-space>
+            <a-button type="primary" icon="import" @click="runMLKEM768Tool(false)">Generate</a-button>
+            <a-button icon="check" @click="runMLKEM768Tool(true)">Verify seed</a-button>
+            <a-tag v-if="inModal.mlkem768Tool.verified" color="green">Seed verified</a-tag>
         </a-space>
     </a-form-item>
     <a-form-item label="mldsa65 Seed">

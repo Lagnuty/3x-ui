@@ -417,12 +417,19 @@ func (s *SubClashService) applySecurity(proxy map[string]any, security string, s
 		if shortID, ok := realitySettings["shortId"].(string); ok && shortID != "" {
 			realityOpts["short-id"] = shortID
 		}
+		// Xray v26.9.8+ requires the hybrid key share before optional
+		// X25519. Mihomo keeps it only when this compatibility flag is set.
+		if support, exists := realitySettings["supportX25519MLKEM768"].(bool); !exists || support {
+			realityOpts["support-x25519mlkem768"] = true
+		}
 		if len(realityOpts) > 0 {
 			proxy["reality-opts"] = realityOpts
 		}
-		if fingerprint, ok := realitySettings["fingerprint"].(string); ok && fingerprint != "" {
-			proxy["client-fingerprint"] = fingerprint
+		fingerprint, _ := realitySettings["fingerprint"].(string)
+		if fingerprint == "" {
+			fingerprint = "chrome"
 		}
+		proxy["client-fingerprint"] = fingerprint
 		return true
 	default:
 		return false
@@ -466,6 +473,9 @@ func (s *SubClashService) realityData(rData map[string]any) map[string]any {
 	}
 	if fingerprint, ok := realityClientSettings["fingerprint"].(string); ok {
 		rDataOut["fingerprint"] = fingerprint
+	}
+	if support, ok := realityClientSettings["supportX25519MLKEM768"].(bool); ok {
+		rDataOut["supportX25519MLKEM768"] = support
 	}
 	if serverNames, ok := rData["serverNames"].([]any); ok && len(serverNames) > 0 {
 		rDataOut["serverName"] = fmt.Sprint(serverNames[0])

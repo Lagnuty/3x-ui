@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1305,28 +1306,62 @@ func (s *ServerService) GetNewUUID() (map[string]string, error) {
 	}, nil
 }
 
-func (s *ServerService) GetNewmlkem768() (any, error) {
-	// Run the command
-	cmd := exec.Command(xray.GetBinaryPath(), "mlkem768")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+func (s *ServerService) GetNewmlkem768(seed string) (map[string]string, error) {
+	args := []string{"mlkem768"}
+	seed = strings.TrimSpace(seed)
+	if seed != "" {
+		if err := validateMLKEM768Value("seed", seed, 64); err != nil {
+			return nil, err
+		}
+		args = append(args, "-i", seed)
+	}
+
+	cmd := exec.Command(xray.GetBinaryPath(), args...)
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("xray mlkem768 failed: %w", err)
 	}
 
-	lines := strings.Split(out.String(), "\n")
+	return parseMLKEM768Output(string(out))
+}
 
-	SeedLine := strings.Split(lines[0], ":")
-	ClientLine := strings.Split(lines[1], ":")
-
-	seed := strings.TrimSpace(SeedLine[1])
-	client := strings.TrimSpace(ClientLine[1])
-
-	keyPair := map[string]any{
-		"seed":   seed,
-		"client": client,
+func parseMLKEM768Output(output string) (map[string]string, error) {
+	values := make(map[string]string, 2)
+	for _, line := range strings.Split(output, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "seed":
+			values["seed"] = strings.TrimSpace(value)
+		case "client":
+			values["client"] = strings.TrimSpace(value)
+		}
 	}
 
-	return keyPair, nil
+	if err := validateMLKEM768Value("seed", values["seed"], 64); err != nil {
+		return nil, fmt.Errorf("invalid xray mlkem768 output: %w", err)
+	}
+	if err := validateMLKEM768Value("client", values["client"], 1184); err != nil {
+		return nil, fmt.Errorf("invalid xray mlkem768 output: %w", err)
+	}
+	return values, nil
+}
+
+func validateMLKEM768Value(name, value string, decodedLength int) error {
+	value = strings.TrimSpace(value)
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		// Accept the older documented standard-base64 form as well. Current
+		// Xray emits unpadded base64url.
+		decoded, err = base64.StdEncoding.DecodeString(value)
+		if err != nil {
+			return fmt.Errorf("%s is not valid base64: %w", name, err)
+		}
+	}
+	if len(decoded) != decodedLength {
+		return fmt.Errorf("%s has decoded length %d, want %d", name, len(decoded), decodedLength)
+	}
+	return nil
 }

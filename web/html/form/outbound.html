@@ -1107,9 +1107,16 @@
           </a-form-item>
           <a-form-item label="uTLS">
             <a-select v-model="outbound.stream.reality.fingerprint" :dropdown-class-name="themeSwitcher.currentTheme">
+              <a-select-option value>None (Mihomo exports should use chrome)</a-select-option>
               <a-select-option v-for="key in UTLS_FINGERPRINT" :value="key">[[ key ]]</a-select-option>
             </a-select>
           </a-form-item>
+          <a-alert class="mb-12" show-icon
+            :type="!outbound.stream.reality.fingerprint || outbound.stream.reality.fingerprint === 'chrome' ? 'info' : 'warning'"
+            :message="!outbound.stream.reality.fingerprint || outbound.stream.reality.fingerprint === 'chrome'
+              ? 'Chrome is the recommended REALITY fingerprint for Mihomo and Xray v26.9.8+.'
+              : 'Older or randomized fingerprints may omit or misorder X25519MLKEM768 and fail with modern REALITY servers.'">
+          </a-alert>
           <a-form-item label="Short ID">
             <a-input v-model.trim="outbound.stream.reality.shortId"></a-input>
           </a-form-item>

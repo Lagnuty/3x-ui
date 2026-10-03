@@ -12,6 +12,12 @@
         confirmLoading: false,
         okText: '{{ i18n "sure" }}',
         isEdit: false,
+        coreVersion: "Unknown",
+        mlkem768Tool: {
+            seed: "",
+            client: "",
+            verified: false,
+        },
         confirm: null,
         inbound: new Inbound(),
         dbInbound: new DBInbound(),
@@ -53,6 +59,14 @@
             this.confirm = confirm;
             this.visible = true;
             this.isEdit = isEdit;
+            this.mlkem768Tool = { seed: "", client: "", verified: false };
+            this.loadCoreVersion();
+        },
+        async loadCoreVersion() {
+            const msg = await HttpUtil.get("/panel/api/server/status");
+            if (msg.success && msg.obj && msg.obj.xray) {
+                this.coreVersion = msg.obj.xray.version || "Unknown";
+            }
         },
         close() {
             inModal.visible = false;
@@ -279,6 +293,65 @@
             clearMldsa65() {
                 this.inbound.stream.reality.mldsa65Seed = "";
                 this.inbound.stream.reality.settings.mldsa65Verify = "";
+            },
+            async runMLKEM768Tool(verify = false) {
+                const seed = verify ? this.inModal.mlkem768Tool.seed.trim() : "";
+                if (verify && !seed) {
+                    this.$message.warning("Enter an ML-KEM-768 seed to verify");
+                    return;
+                }
+                inModal.loading(true);
+                const msg = await HttpUtil.post("/panel/api/server/getNewmlkem768", { seed });
+                inModal.loading(false);
+                if (!msg.success) {
+                    this.inModal.mlkem768Tool.verified = false;
+                    return;
+                }
+                this.inModal.mlkem768Tool.seed = msg.obj.seed;
+                this.inModal.mlkem768Tool.client = msg.obj.client;
+                this.inModal.mlkem768Tool.verified = verify;
+            },
+            setRealityMinClientPreset(preset) {
+                this.inbound.stream.reality.minClientVer = preset === "strict" ? "26.9.8" : "";
+            },
+            compareCoreVersions(left, right) {
+                const parse = value => (value || "").toString().replace(/^v/, "").split(".")
+                    .slice(0, 3).map(part => Number.parseInt(part, 10) || 0);
+                const a = parse(left);
+                const b = parse(right);
+                for (let i = 0; i < 3; i++) {
+                    if (a[i] !== b[i]) return a[i] - b[i];
+                }
+                return 0;
+            },
+            realityMinVersionHint() {
+                const version = this.inModal.coreVersion;
+                if (!version || version === "Unknown") {
+                    return "Core version is unknown. Xray v26.9.8+: empty means no minimum; v26.7.11–v26.7.x may apply the built-in 26.3.27 minimum.";
+                }
+                if (this.compareCoreVersions(version, "26.7.11") >= 0 &&
+                    this.compareCoreVersions(version, "26.9.8") < 0) {
+                    return `Xray v${version}: empty may apply the built-in 26.3.27 minimum. Set an explicit value or upgrade the core.`;
+                }
+                if (this.compareCoreVersions(version, "26.9.8") >= 0) {
+                    return `Xray v${version}: empty means no minimum client version.`;
+                }
+                return `Xray v${version}: verify minClientVer behavior before relying on an empty value.`;
+            },
+            realityMinVersionHintType() {
+                const version = this.inModal.coreVersion;
+                return version && version !== "Unknown" &&
+                    this.compareCoreVersions(version, "26.9.8") >= 0 ? "info" : "warning";
+            },
+            realityFingerprintHint() {
+                const fingerprint = this.inbound.stream.reality.settings.fingerprint || "chrome";
+                if (fingerprint === "chrome") {
+                    return "Chrome is the recommended default for Mihomo and current REALITY clients.";
+                }
+                if (fingerprint === "firefox") {
+                    return "Firefox is generally compatible, but Chrome remains the safest Mihomo default.";
+                }
+                return `${fingerprint} can omit or misorder the X25519MLKEM768 key share. Prefer chrome; random/randomized and older fingerprints may fail on Xray v26.9.8+.`;
             },
             randomizeRealityTarget() {
                 if (typeof getRandomRealityTarget !== "undefined") {
