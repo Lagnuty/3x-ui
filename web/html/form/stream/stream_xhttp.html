@@ -37,8 +37,16 @@
   <a-form-item label="Max Upload Size (Byte)" v-if="inbound.stream.xhttp.mode === 'packet-up'">
     <a-input v-model.trim="inbound.stream.xhttp.scMaxEachPostBytes"></a-input>
   </a-form-item>
+  <a-form-item label="Min Upload Interval (Ms)" v-if="inbound.stream.xhttp.mode === 'packet-up'">
+    <a-input v-model.trim="inbound.stream.xhttp.scMinPostsIntervalMs"
+      placeholder="Core default; old panels forced 30"></a-input>
+  </a-form-item>
   <a-form-item label="Stream-Up Server" v-if="inbound.stream.xhttp.mode === 'stream-up'">
     <a-input v-model.trim="inbound.stream.xhttp.scStreamUpServerSecs"></a-input>
+  </a-form-item>
+  <a-form-item label="No gRPC Header"
+    v-if="inbound.stream.xhttp.mode === 'stream-up' || inbound.stream.xhttp.mode === 'stream-one'">
+    <a-switch v-model="inbound.stream.xhttp.noGRPCHeader"></a-switch>
   </a-form-item>
   <a-form-item label="Padding Bytes">
     <a-input v-model.trim="inbound.stream.xhttp.xPaddingBytes"></a-input>
@@ -128,6 +136,10 @@
     v-if="inbound.stream.xhttp.mode === 'packet-up' && inbound.stream.xhttp.uplinkDataPlacement && inbound.stream.xhttp.uplinkDataPlacement !== 'body'">
     <a-input-number v-model.number="inbound.stream.xhttp.uplinkChunkSize" :min="0"
       placeholder="0 (unlimited)"></a-input-number>
+  </a-form-item>
+  <a-form-item label="Server Max Header Bytes">
+    <a-input-number v-model.number="inbound.stream.xhttp.serverMaxHeaderBytes" :min="0"
+      placeholder="0 (core default)"></a-input-number>
   </a-form-item>
   <a-form-item label="XMUX">
     <a-switch v-model="inbound.stream.xhttp.enableXmux"></a-switch>

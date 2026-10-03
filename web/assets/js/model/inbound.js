@@ -522,7 +522,9 @@ class xHTTPStreamSettings extends XrayCommonClass {
         headers = [],
         scMaxBufferedPosts = 30,
         scMaxEachPostBytes = "1000000",
+        scMinPostsIntervalMs = "",
         scStreamUpServerSecs = "20-80",
+        noGRPCHeader = false,
         noSSEHeader = false,
         xPaddingBytes = "100-1000",
         mode = MODE_OPTION.AUTO,
@@ -541,6 +543,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
         uplinkDataPlacement = '',
         uplinkDataKey = '',
         uplinkChunkSize = 0,
+        serverMaxHeaderBytes = 0,
         xmux = undefined,
     ) {
         super();
@@ -549,7 +552,9 @@ class xHTTPStreamSettings extends XrayCommonClass {
         this.headers = headers;
         this.scMaxBufferedPosts = scMaxBufferedPosts;
         this.scMaxEachPostBytes = scMaxEachPostBytes;
+        this.scMinPostsIntervalMs = scMinPostsIntervalMs;
         this.scStreamUpServerSecs = scStreamUpServerSecs;
+        this.noGRPCHeader = noGRPCHeader;
         this.noSSEHeader = noSSEHeader;
         this.xPaddingBytes = xPaddingBytes;
         this.mode = mode;
@@ -568,6 +573,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
         this.uplinkDataPlacement = uplinkDataPlacement;
         this.uplinkDataKey = uplinkDataKey;
         this.uplinkChunkSize = uplinkChunkSize;
+        this.serverMaxHeaderBytes = serverMaxHeaderBytes;
         this.enableXmux = xmux != null && Object.keys(xmux).length > 0;
         this.xmux = this.enableXmux ? { ...xHTTPDefaultXmux(), ...xmux } : xHTTPDefaultXmux();
     }
@@ -587,7 +593,9 @@ class xHTTPStreamSettings extends XrayCommonClass {
             XrayCommonClass.toHeaders(json.headers),
             json.scMaxBufferedPosts,
             json.scMaxEachPostBytes,
+            json.scMinPostsIntervalMs,
             json.scStreamUpServerSecs,
+            json.noGRPCHeader,
             json.noSSEHeader,
             json.xPaddingBytes,
             json.mode,
@@ -606,6 +614,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
             json.uplinkDataPlacement,
             json.uplinkDataKey,
             json.uplinkChunkSize,
+            json.serverMaxHeaderBytes,
             json.xmux,
         );
     }
@@ -617,7 +626,9 @@ class xHTTPStreamSettings extends XrayCommonClass {
             headers: XrayCommonClass.toV2Headers(this.headers, false),
             scMaxBufferedPosts: this.scMaxBufferedPosts,
             scMaxEachPostBytes: this.scMaxEachPostBytes,
+            scMinPostsIntervalMs: this.scMinPostsIntervalMs,
             scStreamUpServerSecs: this.scStreamUpServerSecs,
+            noGRPCHeader: this.noGRPCHeader,
             noSSEHeader: this.noSSEHeader,
             xPaddingBytes: this.xPaddingBytes,
             mode: this.mode,
@@ -636,6 +647,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
             uplinkDataPlacement: this.uplinkDataPlacement,
             uplinkDataKey: this.uplinkDataKey,
             uplinkChunkSize: this.uplinkChunkSize,
+            serverMaxHeaderBytes: this.serverMaxHeaderBytes,
             xmux: this.enableXmux ? {
                 maxConcurrency: this.xmux.maxConcurrency,
                 maxConnections: this.xmux.maxConnections,
