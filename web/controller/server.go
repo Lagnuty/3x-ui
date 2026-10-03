@@ -67,6 +67,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/getNewEchCert", a.getNewEchCert)
 	g.POST("/getNewmlkem768", a.getNewmlkem768)
 	g.POST("/getPeerCertSha256", a.getPeerCertSHA256)
+	g.POST("/testReverseTunnel", a.testReverseTunnel)
 }
 
 // refreshStatus updates the cached server status and collects CPU history.
@@ -383,6 +384,22 @@ func (a *ServerController) getPeerCertSHA256(c *gin.Context) {
 		return
 	}
 	jsonObj(c, map[string]string{"sha256": hash}, nil)
+}
+
+func (a *ServerController) testReverseTunnel(c *gin.Context) {
+	var request struct {
+		Target string `json:"target"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		jsonMsg(c, "Invalid reverse tunnel test request", err)
+		return
+	}
+	result, err := a.serverService.TestReverseTunnel(request.Target)
+	if err != nil {
+		jsonMsg(c, "Reverse tunnel test failed", err)
+		return
+	}
+	jsonObj(c, result, nil)
 }
 
 // getNewVlessEnc generates a new VLESS encryption key.

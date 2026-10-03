@@ -21,6 +21,10 @@
         isValid: true,
         activeKey: '1',
         tlsPinTarget: '',
+        xrayVersion: '',
+        reverseTestTarget: '',
+        reverseTesting: false,
+        reverseTestResult: null,
         tags: [],
         ok() {
             ObjectUtil.execute(outModal.confirm, outModal.outbound.toJson());
@@ -42,6 +46,8 @@
             this.visible = true;
             this.outbound = isEdit ? Outbound.fromJson(outbound) : new Outbound();
             this.tlsPinTarget = this.outbound.stream.tls.serverName || '';
+            this.reverseTestTarget = '';
+            this.reverseTestResult = null;
             this.isEdit = isEdit;
             this.tags = tags;
             this.check()
@@ -104,7 +110,27 @@
                 return outModal.outbound;
             },
         },
+        computed: {
+            reverseCompatibility() {
+                return getVlessReverseCompatibility(this.outModal.xrayVersion);
+            },
+        },
         methods: {
+            async testReverseTunnel() {
+                if (!this.outModal.reverseTestTarget) {
+                    this.$message.warning('Enter a public reverse endpoint first');
+                    return;
+                }
+                this.outModal.reverseTesting = true;
+                const msg = await HttpUtil.post('/panel/api/server/testReverseTunnel', {
+                    target: this.outModal.reverseTestTarget,
+                });
+                this.outModal.reverseTesting = false;
+                this.outModal.reverseTestResult = msg.success ? msg.obj : {
+                    success: false,
+                    error: msg.msg,
+                };
+            },
             streamNetworkChange() {
                 if (this.outModal.outbound.protocol == Protocols.VLESS && !outModal.outbound
                 .canEnableTlsFlow()) {
@@ -144,6 +170,10 @@
                     this.outModal.check();
                 }
             },
+        },
+        async mounted() {
+            const msg = await HttpUtil.get('/panel/api/server/status');
+            if (msg.success && msg.obj?.xray) this.outModal.xrayVersion = msg.obj.xray.version || '';
         },
     });
 </script>

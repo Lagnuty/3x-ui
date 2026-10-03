@@ -827,6 +827,7 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 					"auth":     client.Auth,
 					"security": client.Security,
 					"flow":     client.Flow,
+					"reverse":  client.Reverse,
 					"password": client.Password,
 					"cipher":   cipher,
 				})
@@ -1298,6 +1299,7 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 				"id":       clients[0].ID,
 				"security": clients[0].Security,
 				"flow":     clients[0].Flow,
+				"reverse":  clients[0].Reverse,
 				"auth":     clients[0].Auth,
 				"password": clients[0].Password,
 				"cipher":   cipher,
@@ -2288,6 +2290,7 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 					"auth":     client.Auth,
 					"security": client.Security,
 					"flow":     client.Flow,
+					"reverse":  client.Reverse,
 					"password": client.Password,
 					"cipher":   cipher,
 				})

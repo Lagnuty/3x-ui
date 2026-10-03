@@ -29,6 +29,19 @@ const TLS_FLOW_CONTROL = {
     VISION_UDP443: "xtls-rprx-vision-udp443",
 };
 
+function getVlessReverseCompatibility(version = '') {
+    const match = String(version).match(/(?:^|v)(\d+)\.(\d+)\.(\d+)/i);
+    if (!match) return { level: 'info', message: 'Core version is unknown; validate the tunnel after saving.' };
+    const value = Number(match[1]) * 1000000 + Number(match[2]) * 1000 + Number(match[3]);
+    if (value >= 26005000 && value < 26006022) {
+        return { level: 'error', message: `${version}: known VLESS reverse regression. Use v26.4.25 or v26.6.22+.` };
+    }
+    if (value < 26004025) {
+        return { level: 'warning', message: `${version}: legacy reverse behavior; upgrade before migrating.` };
+    }
+    return { level: 'success', message: `${version}: VLESS reverse configuration is supported.` };
+}
+
 const UTLS_FINGERPRINT = {
     UTLS_CHROME: "chrome",
     UTLS_FIREFOX: "firefox",
@@ -1902,7 +1915,7 @@ Outbound.VmessSettings = class extends CommonClass {
     }
 };
 Outbound.VLESSSettings = class extends CommonClass {
-    constructor(address, port, id, flow, encryption, reverseTag = '', testpre = 0, testseed = [900, 500, 900, 256]) {
+    constructor(address, port, id, flow, encryption, reverseTag = '', reverseSniffing = null, testpre = 0, testseed = [900, 500, 900, 256]) {
         super();
         this.address = address;
         this.port = port;
@@ -1910,6 +1923,10 @@ Outbound.VLESSSettings = class extends CommonClass {
         this.flow = flow;
         this.encryption = encryption;
         this.reverseTag = reverseTag;
+        this.reverseSniffing = reverseSniffing ? JSON.parse(JSON.stringify(reverseSniffing)) : {
+            enabled: false,
+            destOverride: ['http', 'tls'],
+        };
         this.testpre = testpre;
         this.testseed = testseed;
     }
@@ -1923,6 +1940,7 @@ Outbound.VLESSSettings = class extends CommonClass {
             json.flow,
             json.encryption,
             json.reverse?.tag || '',
+            json.reverse?.sniffing || null,
             json.testpre || 0,
             json.testseed && json.testseed.length >= 4 ? json.testseed : [900, 500, 900, 256]
         );
@@ -1938,6 +1956,14 @@ Outbound.VLESSSettings = class extends CommonClass {
         };
         if (!ObjectUtil.isEmpty(this.reverseTag)) {
             result.reverse = { tag: this.reverseTag };
+            if (this.reverseSniffing?.enabled) {
+                result.reverse.sniffing = {
+                    ...this.reverseSniffing,
+                    destOverride: Array.isArray(this.reverseSniffing.destOverride)
+                        ? this.reverseSniffing.destOverride
+                        : [],
+                };
+            }
         }
         // Only include Vision settings when flow is set
         if (this.flow && this.flow !== '') {

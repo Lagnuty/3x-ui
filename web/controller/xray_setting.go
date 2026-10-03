@@ -2,7 +2,9 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 
+	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/util/common"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 
@@ -40,6 +42,7 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/update", a.updateSetting)
 	g.POST("/resetOutboundsTraffic", a.resetOutboundsTraffic)
 	g.POST("/testOutbound", a.testOutbound)
+	g.POST("/migrateLegacyReverse", a.migrateLegacyReverse)
 }
 
 // getXraySetting retrieves the Xray configuration template, inbound tags, and outbound test URL.
@@ -79,11 +82,29 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 	if outboundTestUrl == "" {
 		outboundTestUrl = "https://www.google.com/generate_204"
 	}
+	vlessReverseCandidates := make([]map[string]any, 0)
+	if inbounds, candidatesErr := a.InboundService.GetAllInbounds(); candidatesErr == nil {
+		for _, inbound := range inbounds {
+			if inbound.Protocol != model.VLESS {
+				continue
+			}
+			clients, _ := a.InboundService.GetClients(inbound)
+			for _, client := range clients {
+				vlessReverseCandidates = append(vlessReverseCandidates, map[string]any{
+					"inboundId":     inbound.Id,
+					"inboundRemark": inbound.Remark,
+					"clientId":      client.ID,
+					"clientEmail":   client.Email,
+				})
+			}
+		}
+	}
 	xrayResponse := map[string]any{
-		"xraySetting":       json.RawMessage(xraySetting),
-		"inboundTags":       json.RawMessage(inboundTags),
-		"clientReverseTags": json.RawMessage(clientReverseTags),
-		"outboundTestUrl":   outboundTestUrl,
+		"xraySetting":            json.RawMessage(xraySetting),
+		"inboundTags":            json.RawMessage(inboundTags),
+		"clientReverseTags":      json.RawMessage(clientReverseTags),
+		"outboundTestUrl":        outboundTestUrl,
+		"vlessReverseCandidates": vlessReverseCandidates,
 	}
 	result, err := json.Marshal(xrayResponse)
 	if err != nil {
@@ -91,6 +112,178 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 		return
 	}
 	jsonObj(c, string(result), nil)
+}
+
+type legacyReverseBridgeMapping struct {
+	LegacyTag   string `json:"legacyTag"`
+	OutboundTag string `json:"outboundTag"`
+}
+
+type legacyReversePortalMapping struct {
+	LegacyTag string `json:"legacyTag"`
+	InboundID int    `json:"inboundId"`
+	ClientID  string `json:"clientId"`
+}
+
+func removeMappedLegacyEntries(entries []any, mapped map[string]bool) []any {
+	remaining := make([]any, 0, len(entries))
+	for _, entry := range entries {
+		entryMap, _ := entry.(map[string]any)
+		tag, _ := entryMap["tag"].(string)
+		if !mapped[tag] {
+			remaining = append(remaining, entry)
+		}
+	}
+	return remaining
+}
+
+// migrateLegacyReverse maps deprecated top-level reverse bridges/portals to
+// VLESS reverse accounts. The legacy tags are retained so existing routing
+// rules keep working.
+func (a *XraySettingController) migrateLegacyReverse(c *gin.Context) {
+	var request struct {
+		Bridges []legacyReverseBridgeMapping `json:"bridges"`
+		Portals []legacyReversePortalMapping `json:"portals"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		jsonMsg(c, "Invalid legacy reverse migration", err)
+		return
+	}
+
+	raw, err := a.SettingService.GetXrayConfigTemplate()
+	if err != nil {
+		jsonMsg(c, "Failed to load Xray template", err)
+		return
+	}
+	raw = service.UnwrapXrayTemplateConfig(raw)
+	var config map[string]any
+	if err = json.Unmarshal([]byte(raw), &config); err != nil {
+		jsonMsg(c, "Invalid Xray template", err)
+		return
+	}
+	legacy, ok := config["reverse"].(map[string]any)
+	if !ok {
+		jsonMsg(c, "No legacy reverse configuration found", fmt.Errorf("reverse section is missing"))
+		return
+	}
+	bridges, _ := legacy["bridges"].([]any)
+	portals, _ := legacy["portals"].([]any)
+	if len(request.Bridges) != len(bridges) || len(request.Portals) != len(portals) {
+		jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("every legacy bridge and portal must be mapped"))
+		return
+	}
+	legacyBridgeTags := map[string]bool{}
+	legacyPortalTags := map[string]bool{}
+	for _, entry := range bridges {
+		entryMap, _ := entry.(map[string]any)
+		tag, _ := entryMap["tag"].(string)
+		legacyBridgeTags[tag] = true
+	}
+	for _, entry := range portals {
+		entryMap, _ := entry.(map[string]any)
+		tag, _ := entryMap["tag"].(string)
+		legacyPortalTags[tag] = true
+	}
+
+	mappedBridges := map[string]bool{}
+	selectedOutbounds := map[string]bool{}
+	outbounds, _ := config["outbounds"].([]any)
+	for _, mapping := range request.Bridges {
+		if !legacyBridgeTags[mapping.LegacyTag] || mappedBridges[mapping.LegacyTag] {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("invalid or duplicate bridge tag %q", mapping.LegacyTag))
+			return
+		}
+		if selectedOutbounds[mapping.OutboundTag] {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("VLESS outbound %q is mapped more than once", mapping.OutboundTag))
+			return
+		}
+		selectedOutbounds[mapping.OutboundTag] = true
+		found := false
+		for _, rawOutbound := range outbounds {
+			outbound, _ := rawOutbound.(map[string]any)
+			if outbound["tag"] != mapping.OutboundTag || outbound["protocol"] != "vless" {
+				continue
+			}
+			settings, _ := outbound["settings"].(map[string]any)
+			if settings == nil {
+				settings = map[string]any{}
+				outbound["settings"] = settings
+			}
+			settings["reverse"] = map[string]any{"tag": mapping.LegacyTag}
+			mappedBridges[mapping.LegacyTag] = true
+			found = true
+			break
+		}
+		if !found {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("VLESS outbound %q was not found", mapping.OutboundTag))
+			return
+		}
+	}
+
+	mappedPortals := map[string]bool{}
+	selectedClients := map[string]bool{}
+	for _, mapping := range request.Portals {
+		if !legacyPortalTags[mapping.LegacyTag] || mappedPortals[mapping.LegacyTag] {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("invalid or duplicate portal tag %q", mapping.LegacyTag))
+			return
+		}
+		clientKey := fmt.Sprintf("%d/%s", mapping.InboundID, mapping.ClientID)
+		if selectedClients[clientKey] {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("VLESS client %q is mapped more than once", mapping.ClientID))
+			return
+		}
+		selectedClients[clientKey] = true
+		inbound, getErr := a.InboundService.GetInbound(mapping.InboundID)
+		if getErr != nil || inbound.Protocol != model.VLESS {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("VLESS inbound %d was not found", mapping.InboundID))
+			return
+		}
+		clients, getErr := a.InboundService.GetClients(inbound)
+		if getErr != nil {
+			jsonMsg(c, "Legacy reverse migration failed", getErr)
+			return
+		}
+		var selected *model.Client
+		for i := range clients {
+			if clients[i].ID == mapping.ClientID {
+				client := clients[i]
+				client.Reverse = &model.ClientReverse{Tag: mapping.LegacyTag}
+				selected = &client
+				break
+			}
+		}
+		if selected == nil {
+			jsonMsg(c, "Legacy reverse migration failed", fmt.Errorf("client %q was not found", mapping.ClientID))
+			return
+		}
+		settings, _ := json.Marshal(map[string]any{"clients": []model.Client{*selected}})
+		update := &model.Inbound{Id: inbound.Id, Settings: string(settings)}
+		needRestart, updateErr := a.InboundService.UpdateInboundClient(update, mapping.ClientID)
+		if updateErr != nil {
+			jsonMsg(c, "Legacy reverse migration failed", updateErr)
+			return
+		}
+		if needRestart {
+			a.XrayService.SetToNeedRestart()
+		}
+		mappedPortals[mapping.LegacyTag] = true
+	}
+
+	legacy["bridges"] = removeMappedLegacyEntries(bridges, mappedBridges)
+	legacy["portals"] = removeMappedLegacyEntries(portals, mappedPortals)
+	if len(legacy["bridges"].([]any)) == 0 && len(legacy["portals"].([]any)) == 0 {
+		delete(config, "reverse")
+	}
+	updated, err := json.MarshalIndent(config, "", "  ")
+	if err == nil {
+		err = a.XraySettingService.SaveXraySetting(string(updated))
+	}
+	if err != nil {
+		jsonMsg(c, "Failed to save migrated Xray template", err)
+		return
+	}
+	a.XrayService.SetToNeedRestart()
+	jsonMsg(c, "Legacy reverse migrated to VLESS reverse; restart Xray to apply it", nil)
 }
 
 // updateSetting updates the Xray configuration settings.

@@ -351,6 +351,34 @@
             </template>
             <a-input v-model.trim="outbound.settings.reverseTag" :placeholder='`{{ i18n "pages.xray.outbound.reverseTagPlaceholder" }}`'></a-input>
           </a-form-item>
+          <template v-if="outbound.settings.reverseTag">
+            <a-alert :type="reverseCompatibility.level" show-icon :style="{ marginBottom: '12px' }"
+              :message="reverseCompatibility.message"
+              description="Private/bridge side: this VLESS outbound maintains the reverse tunnel and appears as an inbound route tag.">
+            </a-alert>
+            <a-form-item label="Reverse traffic sniffing">
+              <a-switch v-model="outbound.settings.reverseSniffing.enabled"></a-switch>
+            </a-form-item>
+            <a-form-item v-if="outbound.settings.reverseSniffing.enabled" label="Destination override">
+              <a-select mode="multiple" v-model="outbound.settings.reverseSniffing.destOverride"
+                :dropdown-class-name="themeSwitcher.currentTheme">
+                <a-select-option value="http">http</a-select-option>
+                <a-select-option value="tls">tls</a-select-option>
+                <a-select-option value="quic">quic</a-select-option>
+                <a-select-option value="fakedns">fakedns</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="Live reverse tunnel test">
+              <a-input-search v-model.trim="outModal.reverseTestTarget"
+                placeholder="tcp://127.0.0.1:8080 or https://public-entry.example" enter-button="Test"
+                :loading="outModal.reverseTesting" @search="testReverseTunnel"></a-input-search>
+              <a-alert v-if="outModal.reverseTestResult"
+                :type="outModal.reverseTestResult.success ? 'success' : 'error'" show-icon :style="{ marginTop: '8px' }"
+                :message="outModal.reverseTestResult.success ? `Tunnel reachable in ${outModal.reverseTestResult.delay} ms` : 'Tunnel probe failed'"
+                :description="outModal.reverseTestResult.error || (outModal.reverseTestResult.statusCode ? `HTTP ${outModal.reverseTestResult.statusCode}` : '')">
+              </a-alert>
+            </a-form-item>
+          </template>
         </template>
         <template v-if="outbound.canEnableTlsFlow()">
           <a-form-item label="Flow">

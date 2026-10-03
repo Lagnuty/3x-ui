@@ -1,5 +1,38 @@
 {{define "settings/xray/advanced"}}
 <a-space direction="vertical" size="small" :style="{ marginTop: '20px' }">
+    <a-card v-if="legacyReverseBridges.length || legacyReversePortals.length" size="small"
+        title="Legacy reverse migration" :style="{ marginBottom: '16px', width: '100%' }">
+        <a-alert type="warning" show-icon :style="{ marginBottom: '12px' }"
+            message="Deprecated top-level reverse configuration detected"
+            description="Map every legacy bridge/portal to a dedicated VLESS reverse account. Existing tags are preserved so routing rules continue to work.">
+        </a-alert>
+        <a-form layout="vertical">
+            <a-form-item v-for="entry in legacyReverseBridges" :key="`bridge-${entry.tag}`"
+                :label="`Bridge ${entry.tag} (${entry.domain || 'no domain'}) → VLESS outbound`">
+                <a-select v-model="legacyReverseMappings.bridges[entry.tag]"
+                    :dropdown-class-name="themeSwitcher.currentTheme" placeholder="Select a dedicated VLESS outbound">
+                    <a-select-option v-for="outbound in vlessReverseOutbounds" :key="outbound.tag" :value="outbound.tag">
+                        [[ outbound.tag ]]
+                    </a-select-option>
+                </a-select>
+            </a-form-item>
+            <a-form-item v-for="entry in legacyReversePortals" :key="`portal-${entry.tag}`"
+                :label="`Portal ${entry.tag} (${entry.domain || 'no domain'}) → VLESS inbound client`">
+                <a-select v-model="legacyReverseMappings.portals[entry.tag]"
+                    :dropdown-class-name="themeSwitcher.currentTheme" placeholder="Select a dedicated VLESS client UUID">
+                    <a-select-option v-for="candidate in vlessReverseCandidates"
+                        :key="`${candidate.inboundId}|${candidate.clientId}`"
+                        :value="`${candidate.inboundId}|${candidate.clientId}`">
+                        [[ candidate.inboundRemark || `Inbound #${candidate.inboundId}` ]] / [[ candidate.clientEmail || candidate.clientId ]]
+                    </a-select-option>
+                </a-select>
+            </a-form-item>
+            <a-button type="primary" icon="swap" :disabled="!canMigrateLegacyReverse"
+                :loading="legacyReverseMigrating" @click="migrateLegacyReverse">
+                Convert to VLESS reverse
+            </a-button>
+        </a-form>
+    </a-card>
     <a-list-item-meta title='{{ i18n "pages.xray.Template"}}'
         description='{{ i18n "pages.xray.TemplateDesc"}}'></a-list-item-meta>
     <a-radio-group v-model="advSettings" @change="changeCode" button-style="solid" :style="{ margin: '10px 0' }"

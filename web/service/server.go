@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"mime/multipart"
+	stdnet "net"
 	"net/http"
 	"net/url"
 	"os"
@@ -99,6 +100,15 @@ type Status struct {
 	} `json:"appStats"`
 }
 
+// ReverseTunnelTestResult is the result of probing a public endpoint routed
+// through a running VLESS reverse tunnel.
+type ReverseTunnelTestResult struct {
+	Success    bool   `json:"success"`
+	Delay      int64  `json:"delay"`
+	StatusCode int    `json:"statusCode,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
 // Release represents information about a software release from GitHub.
 type Release struct {
 	TagName string `json:"tag_name"` // The tag name of the release
@@ -116,15 +126,15 @@ type GeoFileDiagnostic struct {
 // DomainMatcherDiagnostics exposes the core-managed MPH cache state without
 // writing legacy domainMatcher fields into the Xray JSON configuration.
 type DomainMatcherDiagnostics struct {
-	Mode       string                  `json:"mode"`
-	CacheMode  string                  `json:"cacheMode"`
-	Lifecycle  string                  `json:"lifecycle"`
-	Version    string                  `json:"version"`
-	Running    bool                    `json:"running"`
-	SlowStart  bool                    `json:"slowStart"`
-	Startup    xray.StartupDiagnostics `json:"startup"`
-	Geosite    GeoFileDiagnostic       `json:"geosite"`
-	GeoIP      GeoFileDiagnostic       `json:"geoip"`
+	Mode      string                  `json:"mode"`
+	CacheMode string                  `json:"cacheMode"`
+	Lifecycle string                  `json:"lifecycle"`
+	Version   string                  `json:"version"`
+	Running   bool                    `json:"running"`
+	SlowStart bool                    `json:"slowStart"`
+	Startup   xray.StartupDiagnostics `json:"startup"`
+	Geosite   GeoFileDiagnostic       `json:"geosite"`
+	GeoIP     GeoFileDiagnostic       `json:"geoip"`
 }
 
 // ServerService provides business logic for server monitoring and management.
@@ -1336,6 +1346,71 @@ func (s *ServerService) GetPeerCertSHA256(target string) (string, error) {
 		return "", fmt.Errorf("xray tls ping failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return parseLeafCertSHA256(string(out))
+}
+
+// TestReverseTunnel probes the public entry point that is expected to be
+// routed through the currently running VLESS reverse tunnel. It deliberately
+// tests the live service instead of starting a temporary Xray process because
+// reverse tunnel state exists only in the running core.
+func (s *ServerService) TestReverseTunnel(target string) (*ReverseTunnelTestResult, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return nil, fmt.Errorf("target is required")
+	}
+
+	u, err := url.Parse(target)
+	if err != nil {
+		return nil, fmt.Errorf("invalid target: %w", err)
+	}
+	if u.Hostname() == "" {
+		return nil, fmt.Errorf("target must include a host")
+	}
+
+	const timeout = 10 * time.Second
+	started := time.Now()
+	result := &ReverseTunnelTestResult{}
+	switch strings.ToLower(u.Scheme) {
+	case "tcp":
+		if u.Port() == "" {
+			return nil, fmt.Errorf("tcp target must include a port")
+		}
+		conn, dialErr := stdnet.DialTimeout("tcp", u.Host, timeout)
+		result.Delay = time.Since(started).Milliseconds()
+		if dialErr != nil {
+			result.Error = dialErr.Error()
+			return result, nil
+		}
+		_ = conn.Close()
+		result.Success = true
+		return result, nil
+
+	case "http", "https":
+		client := &http.Client{
+			Timeout: timeout,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodHead, u.String(), nil)
+		if reqErr != nil {
+			return nil, reqErr
+		}
+		resp, requestErr := client.Do(req)
+		result.Delay = time.Since(started).Milliseconds()
+		if requestErr != nil {
+			result.Error = requestErr.Error()
+			return result, nil
+		}
+		defer resp.Body.Close()
+		result.StatusCode = resp.StatusCode
+		result.Success = resp.StatusCode < http.StatusInternalServerError
+		if !result.Success {
+			result.Error = resp.Status
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("unsupported scheme %q; use tcp, http, or https", u.Scheme)
+	}
 }
 
 func validateTLSPingTarget(target string) (string, error) {

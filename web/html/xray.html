@@ -281,6 +281,9 @@
       oldOutboundTestUrl: 'https://www.google.com/generate_204',
       inboundTags: [],
       clientReverseTags: [],
+      vlessReverseCandidates: [],
+      legacyReverseMappings: { bridges: {}, portals: {} },
+      legacyReverseMigrating: false,
       outboundsTraffic: [],
       outboundTestStates: {}, // Track testing state and results for each outbound
       saveBtnDisable: true,
@@ -550,6 +553,32 @@
       }
     },
     methods: {
+      initializeLegacyReverseMappings() {
+        const reverse = this.templateSettings?.reverse || {};
+        const bridgeMappings = {};
+        const portalMappings = {};
+        (reverse.bridges || []).forEach(entry => { bridgeMappings[entry.tag] = ''; });
+        (reverse.portals || []).forEach(entry => { portalMappings[entry.tag] = ''; });
+        this.legacyReverseMappings = { bridges: bridgeMappings, portals: portalMappings };
+      },
+      async migrateLegacyReverse() {
+        if (!this.canMigrateLegacyReverse) return;
+        const bridges = this.legacyReverseBridges.map(entry => ({
+          legacyTag: entry.tag,
+          outboundTag: this.legacyReverseMappings.bridges[entry.tag],
+        }));
+        const portals = this.legacyReversePortals.map(entry => {
+          const [inboundId, clientId] = this.legacyReverseMappings.portals[entry.tag].split('|');
+          return { legacyTag: entry.tag, inboundId: Number(inboundId), clientId };
+        });
+        this.legacyReverseMigrating = true;
+        const msg = await HttpUtil.post('/panel/xray/migrateLegacyReverse', { bridges, portals });
+        this.legacyReverseMigrating = false;
+        if (msg.success) {
+          this.$message.success(msg.msg);
+          await this.getXraySetting();
+        }
+      },
       loading(spinning = true) {
         this.loadingStates.spinning = spinning;
       },
@@ -573,9 +602,11 @@
           this.xraySetting = xs;
           this.inboundTags = result.inboundTags;
           this.clientReverseTags = result.clientReverseTags || [];
+          this.vlessReverseCandidates = result.vlessReverseCandidates || [];
           this.outboundTestUrl = result.outboundTestUrl || 'https://www.google.com/generate_204';
           this.oldOutboundTestUrl = this.outboundTestUrl;
           this.saveBtnDisable = true;
+          this.initializeLegacyReverseMappings();
         }
       },
       async updateXraySetting() {
@@ -1317,6 +1348,20 @@
       }
     },
     computed: {
+      legacyReverseBridges() {
+        return this.templateSettings?.reverse?.bridges || [];
+      },
+      legacyReversePortals() {
+        return this.templateSettings?.reverse?.portals || [];
+      },
+      vlessReverseOutbounds() {
+        return (this.templateSettings?.outbounds || []).filter(outbound => outbound.protocol === Protocols.VLESS);
+      },
+      canMigrateLegacyReverse() {
+        const bridgesReady = this.legacyReverseBridges.every(entry => this.legacyReverseMappings.bridges[entry.tag]);
+        const portalsReady = this.legacyReversePortals.every(entry => this.legacyReverseMappings.portals[entry.tag]);
+        return (this.legacyReverseBridges.length + this.legacyReversePortals.length > 0) && bridgesReady && portalsReady;
+      },
       templateSettings: {
         get: function() {
           const parsedSettings = this.xraySetting ? JSON.parse(this.xraySetting) : null;

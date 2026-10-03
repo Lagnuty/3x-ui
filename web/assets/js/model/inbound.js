@@ -25,6 +25,19 @@ const TLS_FLOW_CONTROL = {
     VISION_UDP443: "xtls-rprx-vision-udp443",
 };
 
+function getVlessReverseCompatibility(version = '') {
+    const match = String(version).match(/(?:^|v)(\d+)\.(\d+)\.(\d+)/i);
+    if (!match) return { level: 'info', message: 'Core version is unknown; validate the tunnel after saving.' };
+    const value = Number(match[1]) * 1000000 + Number(match[2]) * 1000 + Number(match[3]);
+    if (value >= 26005000 && value < 26006022) {
+        return { level: 'error', message: `${version}: known VLESS reverse regression. Use v26.4.25 or v26.6.22+.` };
+    }
+    if (value < 26004025) {
+        return { level: 'warning', message: `${version}: legacy reverse behavior; upgrade before migrating.` };
+    }
+    return { level: 'success', message: `${version}: VLESS reverse configuration is supported.` };
+}
+
 const TLS_VERSION_OPTION = {
     TLS10: "1.0",
     TLS11: "1.1",

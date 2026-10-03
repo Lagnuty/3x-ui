@@ -141,6 +141,21 @@
     </template>
     <a-input v-model.trim="client.reverseTag" :placeholder='`{{ i18n "pages.xray.outbound.reverseTagPlaceholder" }}`'></a-input>
   </a-form-item>
+  <template v-if="inbound.protocol === Protocols.VLESS && client.reverseTag">
+    <a-alert :type="reverseCompatibility.level" show-icon :style="{ marginBottom: '12px' }"
+      :message="reverseCompatibility.message"
+      description="Public/server side: this dedicated client UUID becomes a routable outbound. Do not reuse it for normal proxy traffic.">
+    </a-alert>
+    <a-form-item label="Live reverse tunnel test">
+      <a-input-search v-model.trim="reverseTestTarget" placeholder="tcp://127.0.0.1:8080 or https://public-entry.example"
+        enter-button="Test" :loading="reverseTesting" @search="testReverseTunnel"></a-input-search>
+      <a-alert v-if="reverseTestResult" :type="reverseTestResult.success ? 'success' : 'error'" show-icon
+        :style="{ marginTop: '8px' }"
+        :message="reverseTestResult.success ? `Tunnel reachable in ${reverseTestResult.delay} ms` : 'Tunnel probe failed'"
+        :description="reverseTestResult.error || (reverseTestResult.statusCode ? `HTTP ${reverseTestResult.statusCode}` : '')">
+      </a-alert>
+    </a-form-item>
+  </template>
   <a-form-item>
     <template slot="label">
       <a-tooltip>

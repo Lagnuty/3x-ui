@@ -49,6 +49,10 @@
             this.clients = this.inbound.clients;
             this.index = index === null ? this.clients.length : index;
             this.delayedStart = false;
+            if (window.clientModalApp) {
+                clientModalApp.reverseTestTarget = '';
+                clientModalApp.reverseTestResult = null;
+            }
             if (isEdit) {
                 if (this.clients[index].expiryTime < 0) {
                     this.delayedStart = true;
@@ -103,6 +107,10 @@
         el: '#client-modal',
         data: {
             clientModal,
+            xrayVersion: '',
+            reverseTestTarget: '',
+            reverseTesting: false,
+            reverseTestResult: null,
             get inbound() {
                 return this.clientModal.inbound;
             },
@@ -141,7 +149,27 @@
                 this.client.expiryTime = -86400000 * days;
             },
         },
+        computed: {
+            reverseCompatibility() {
+                return getVlessReverseCompatibility(this.xrayVersion);
+            },
+        },
         methods: {
+            async testReverseTunnel() {
+                if (!this.reverseTestTarget) {
+                    this.$message.warning('Enter a public reverse endpoint first');
+                    return;
+                }
+                this.reverseTesting = true;
+                const msg = await HttpUtil.post('/panel/api/server/testReverseTunnel', {
+                    target: this.reverseTestTarget,
+                });
+                this.reverseTesting = false;
+                this.reverseTestResult = msg.success ? msg.obj : {
+                    success: false,
+                    error: msg.msg,
+                };
+            },
             async getDBClientIps(email) {
                 const msg = await HttpUtil.post(`/panel/api/inbounds/clientIps/${email}`);
                 if (!msg.success) {
@@ -187,6 +215,10 @@
                     },
                 })
             },
+        },
+        async mounted() {
+            const msg = await HttpUtil.get('/panel/api/server/status');
+            if (msg.success && msg.obj?.xray) this.xrayVersion = msg.obj.xray.version || '';
         },
     });
 </script>

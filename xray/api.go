@@ -163,6 +163,26 @@ func (x *XrayAPI) AddUser(Protocol string, inboundTag string, user map[string]an
 			Id:   userID,
 			Flow: userFlow,
 		}
+		if reverseValue, ok := user["reverse"]; ok && reverseValue != nil {
+			var reverseTag string
+			switch reverse := reverseValue.(type) {
+			case map[string]any:
+				reverseTag, _ = reverse["tag"].(string)
+			case *vless.Reverse:
+				reverseTag = reverse.Tag
+			default:
+				encoded, _ := json.Marshal(reverseValue)
+				var reverseConfig struct {
+					Tag string `json:"tag"`
+				}
+				if json.Unmarshal(encoded, &reverseConfig) == nil {
+					reverseTag = reverseConfig.Tag
+				}
+			}
+			if reverseTag != "" {
+				vlessAccount.Reverse = &vless.Reverse{Tag: reverseTag}
+			}
+		}
 		// Add testseed if provided
 		if testseedVal, ok := user["testseed"]; ok {
 			if testseedArr, ok := testseedVal.([]any); ok && len(testseedArr) >= 4 {
