@@ -423,10 +423,7 @@ func normalizeFinalMaskStreamSettings(stream map[string]any) bool {
 		return false
 	}
 
-	rawTCP, hasTCP := finalmask["tcp"].([]any)
-	if !hasTCP {
-		return false
-	}
+	rawTCP, _ := finalmask["tcp"].([]any)
 
 	filteredTCP := make([]any, 0, len(rawTCP))
 	changed := false
@@ -444,18 +441,60 @@ func normalizeFinalMaskStreamSettings(stream map[string]any) bool {
 		filteredTCP = append(filteredTCP, rawMask)
 	}
 
-	if !changed {
-		return false
-	}
-	if len(filteredTCP) > 0 {
+	if len(rawTCP) > 0 && len(filteredTCP) > 0 {
 		finalmask["tcp"] = filteredTCP
-	} else {
+	} else if len(rawTCP) > 0 {
 		delete(finalmask, "tcp")
+	}
+	if rawUDP, ok := finalmask["udp"].([]any); ok {
+		normalizedUDP := make([]any, 0, len(rawUDP))
+		for _, rawMask := range rawUDP {
+			mask, _ := rawMask.(map[string]any)
+			if mask == nil {
+				changed = true
+				continue
+			}
+			normalized := normalizeLegacyFinalMaskUDPSettings(mask)
+			if fmt.Sprint(normalized) != fmt.Sprint(mask) {
+				changed = true
+			}
+			normalizedUDP = append(normalizedUDP, normalized)
+		}
+		finalmask["udp"] = normalizedUDP
 	}
 	if len(finalmask) == 0 {
 		delete(stream, "finalmask")
 	}
-	return true
+	return changed
+}
+
+func normalizeLegacyFinalMaskUDPSettings(mask map[string]any) map[string]any {
+	maskType, _ := mask["type"].(string)
+	settings, _ := mask["settings"].(map[string]any)
+	switch maskType {
+	case "mkcp-aes128gcm":
+		return map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"value": settings["password"]}}
+	case "mkcp-original":
+		return map[string]any{"type": "mkcp-legacy"}
+	case "header-dns":
+		return map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"header": "dns", "value": settings["domain"]}}
+	case "header-dtls", "header-srtp", "header-utp", "header-wechat", "header-wireguard":
+		return map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"header": strings.TrimPrefix(maskType, "header-")}}
+	case "xicmp":
+		if _, exists := settings["ips"]; !exists {
+			if ip, ok := settings["ip"].(string); ok && strings.TrimSpace(ip) != "" {
+				copySettings := map[string]any{}
+				for key, value := range settings {
+					copySettings[key] = value
+				}
+				copySettings["ips"] = []any{ip}
+				delete(copySettings, "ip")
+				delete(copySettings, "id")
+				return map[string]any{"type": "xicmp", "settings": copySettings}
+			}
+		}
+	}
+	return mask
 }
 
 func hasCompleteFinalMaskXMCSettings(value any) bool {
@@ -463,10 +502,23 @@ func hasCompleteFinalMaskXMCSettings(value any) bool {
 	if settings == nil {
 		return false
 	}
-	for _, key := range []string{"profile", "texture", "signature"} {
-		field, exists := settings[key]
-		if !exists || field == nil || strings.TrimSpace(fmt.Sprint(field)) == "" {
+	if strings.TrimSpace(fmt.Sprint(settings["password"])) == "" || settings["password"] == nil {
+		return false
+	}
+	profiles, ok := settings["profiles"].([]any)
+	if !ok || len(profiles) == 0 {
+		return false
+	}
+	for _, raw := range profiles {
+		profile, ok := raw.(map[string]any)
+		if !ok {
 			return false
+		}
+		for _, key := range []string{"username", "uuid", "texturesValue", "texturesSignature"} {
+			field, exists := profile[key]
+			if !exists || field == nil || strings.TrimSpace(fmt.Sprint(field)) == "" {
+				return false
+			}
 		}
 	}
 	return true

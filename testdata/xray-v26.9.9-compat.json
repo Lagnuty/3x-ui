@@ -1,0 +1,125 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "xhttp-in",
+      "listen": "127.0.0.1",
+      "port": 31001,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "none",
+        "clients": [{ "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8" }]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "none",
+        "xhttpSettings": {
+          "path": "/compat",
+          "mode": "packet-up",
+          "xPaddingBytes": "100-1000",
+          "xPaddingObfsMode": true,
+          "xPaddingKey": "x_padding",
+          "xPaddingHeader": "X-Padding",
+          "xPaddingPlacement": "header",
+          "xPaddingMethod": "tokenish",
+          "sessionIDPlacement": "cookie",
+          "sessionIDKey": "x_session",
+          "sessionIDTable": "hex",
+          "sessionIDLength": 24,
+          "uplinkDataPlacement": "header",
+          "uplinkDataKey": "X-Data",
+          "uplinkHTTPMethod": "POST",
+          "headers": { "User-Agent": "3x-ui compatibility test" }
+        },
+        "finalmask": {
+          "tcp": [{
+            "type": "xmc",
+            "settings": {
+              "hostname": "mc.example.com",
+              "password": "test-password",
+              "profiles": [{
+                "username": "player_1",
+                "uuid": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+                "texturesValue": "texture-value",
+                "texturesSignature": "texture-signature"
+              }]
+            }
+          }],
+          "udp": [
+            { "type": "mkcp-legacy", "settings": { "header": "wireguard" } },
+            { "type": "xicmp", "settings": { "dgram": false, "ips": ["1.1.1.1"] } }
+          ]
+        }
+      }
+    },
+    {
+      "tag": "grpc-in",
+      "listen": "127.0.0.1",
+      "port": 31002,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "none",
+        "clients": [{ "id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8" }]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "none",
+        "grpcSettings": { "serviceName": "compat" },
+        "sockopt": { "trustedXForwardedFor": ["X-Forwarded-For", "CF-Connecting-IP"] }
+      }
+    },
+    {
+      "tag": "tun-in",
+      "protocol": "tun",
+      "settings": {
+        "name": "xraycompat",
+        "mtu": 1500,
+        "gateway": ["10.77.0.1/24"],
+        "autoSystemRoutingTable": ["main"],
+        "autoOutboundsInterface": "auto"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "pinned-vless",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [{
+          "address": "example.com",
+          "port": 443,
+          "users": [{
+            "id": "6ba7b812-9dad-11d1-80b4-00c04fd430c8",
+            "encryption": "none"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "example.com",
+          "fingerprint": "chrome",
+          "verifyPeerCertByName": "example.com",
+          "pinnedPeerCertSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "xhttpSettings": {
+          "path": "/compat",
+          "mode": "packet-up",
+          "headers": { "User-Agent": "3x-ui compatibility test" },
+          "sessionIDPlacement": "header",
+          "sessionIDKey": "X-Session"
+        }
+      }
+    },
+    { "tag": "direct", "protocol": "freedom", "settings": {} }
+  ],
+  "routing": {
+    "rules": [{
+      "type": "field",
+      "inboundTag": ["grpc-in"],
+      "vlessRoute": "443",
+      "outboundTag": "direct"
+    }]
+  }
+}

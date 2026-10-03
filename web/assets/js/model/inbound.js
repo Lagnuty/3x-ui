@@ -1155,7 +1155,10 @@ class UdpMask extends XrayCommonClass {
             case 'xdns':
                 return { domains: Array.isArray(settings.domains) ? settings.domains : [] };
             case 'xicmp':
-                return { ip: settings.ip || '', id: settings.id ?? 0 };
+                return {
+                    dgram: settings.dgram ?? false,
+                    ips: Array.isArray(settings.ips) ? settings.ips : (settings.ip ? [settings.ip] : []),
+                };
             case 'mkcp-original':
             case 'header-dtls':
             case 'header-srtp':
@@ -1197,7 +1200,21 @@ class UdpMask extends XrayCommonClass {
             return out;
         };
 
+        let type = this.type;
         let settings = this.settings;
+        if (type === 'mkcp-aes128gcm') {
+            type = 'mkcp-legacy';
+            settings = { value: settings?.password ?? '' };
+        } else if (type === 'mkcp-original') {
+            type = 'mkcp-legacy';
+            settings = {};
+        } else if (type === 'header-dns') {
+            type = 'mkcp-legacy';
+            settings = { header: 'dns', value: settings?.domain ?? '' };
+        } else if (['header-dtls', 'header-srtp', 'header-utp', 'header-wechat', 'header-wireguard'].includes(type)) {
+            settings = { header: type.substring('header-'.length) };
+            type = 'mkcp-legacy';
+        }
         if (this.type === 'noise' && settings && Array.isArray(settings.noise)) {
             settings = { ...settings, noise: settings.noise.map(cleanItem) };
         } else if (this.type === 'header-custom' && settings) {
@@ -1209,7 +1226,7 @@ class UdpMask extends XrayCommonClass {
         }
 
         return {
-            type: this.type,
+            type: type,
             settings: (settings && Object.keys(settings).length > 0) ? settings : undefined
         };
     }
@@ -1247,9 +1264,14 @@ class TcpMask extends XrayCommonClass {
                 };
             case 'xmc':
                 return {
-                    profile: settings.profile ?? '',
-                    texture: settings.texture ?? '',
-                    signature: settings.signature ?? '',
+                    hostname: settings.hostname ?? '',
+                    password: settings.password ?? '',
+                    profiles: Array.isArray(settings.profiles) ? settings.profiles.map(profile => ({
+                        username: profile.username ?? '',
+                        uuid: profile.uuid ?? '',
+                        texturesValue: profile.texturesValue ?? '',
+                        texturesSignature: profile.texturesSignature ?? '',
+                    })) : [],
                 };
             default:
                 return settings;
@@ -1284,8 +1306,10 @@ class TcpMask extends XrayCommonClass {
                 servers: Array.isArray(settings.servers) ? settings.servers.map(cleanGroup) : settings.servers,
             };
         } else if (this.type === 'xmc') {
-            const required = ['profile', 'texture', 'signature'];
-            if (!settings || required.some(key => ObjectUtil.isEmpty(settings[key]))) {
+            const completeProfiles = Array.isArray(settings?.profiles) && settings.profiles.length > 0 &&
+                settings.profiles.every(profile => ['username', 'uuid', 'texturesValue', 'texturesSignature']
+                    .every(key => !ObjectUtil.isEmpty(profile[key])));
+            if (!settings || ObjectUtil.isEmpty(settings.password) || !completeProfiles) {
                 return undefined;
             }
         }

@@ -90,7 +90,7 @@ func TestNormalizeStreamSettingsDropsIncompleteFinalMaskXMC(t *testing.T) {
 }
 
 func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
-	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"profile":"chrome","texture":"tex","signature":"sig"}}]}}`
+	stream := `{"network":"tcp","finalmask":{"tcp":[{"type":"xmc","settings":{"hostname":"mc.example.com","password":"secret","profiles":[{"username":"player_1","uuid":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","texturesValue":"tex","texturesSignature":"sig"}]}}]}}`
 
 	normalized := normalizeStreamSettings(stream)
 
@@ -100,8 +100,25 @@ func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
 	}
 	tcp := got["finalmask"].(map[string]any)["tcp"].([]any)
 	settings := tcp[0].(map[string]any)["settings"].(map[string]any)
-	if settings["profile"] != "chrome" || settings["texture"] != "tex" || settings["signature"] != "sig" {
+	if settings["password"] != "secret" || len(settings["profiles"].([]any)) != 1 {
 		t.Fatalf("xmc settings = %#v, want complete settings preserved", settings)
+	}
+}
+
+func TestNormalizeStreamSettingsMigratesLegacyFinalMaskUDPShapes(t *testing.T) {
+	stream := `{"finalmask":{"udp":[{"type":"header-wireguard","settings":{}},{"type":"xicmp","settings":{"ip":"1.1.1.1","id":1}}]}}`
+	normalized := normalizeStreamSettings(stream)
+	var got map[string]any
+	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
+		t.Fatal(err)
+	}
+	udp := got["finalmask"].(map[string]any)["udp"].([]any)
+	if udp[0].(map[string]any)["type"] != "mkcp-legacy" {
+		t.Fatalf("header mask = %#v", udp[0])
+	}
+	settings := udp[1].(map[string]any)["settings"].(map[string]any)
+	if len(settings["ips"].([]any)) != 1 {
+		t.Fatalf("xicmp = %#v", settings)
 	}
 }
 

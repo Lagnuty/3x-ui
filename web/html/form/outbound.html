@@ -859,19 +859,31 @@
 
             <!-- XMC (TCP) -->
             <template v-if="mask.type === 'xmc'">
-              <a-alert v-if="!mask.settings.profile || !mask.settings.texture || !mask.settings.signature"
+              <a-alert v-if="!mask.settings.password || !mask.settings.profiles || mask.settings.profiles.length === 0"
                 type="warning" show-icon
-                message="XMC requires profile, texture, and signature; incomplete masks are removed before saving.">
+                message="XMC requires a password and at least one complete Minecraft profile; incomplete masks are removed before saving.">
               </a-alert>
-              <a-form-item label="Profile">
-                <a-input v-model.trim="mask.settings.profile" placeholder="e.g. chrome" />
+              <a-form-item label="Hostname">
+                <a-input v-model.trim="mask.settings.hostname" placeholder="Optional Minecraft hostname" />
               </a-form-item>
-              <a-form-item label="Texture">
-                <a-input v-model.trim="mask.settings.texture" placeholder="Texture payload" />
+              <a-form-item label="Password">
+                <a-input-password v-model.trim="mask.settings.password" placeholder="Shared XMC password" />
               </a-form-item>
-              <a-form-item label="Signature">
-                <a-input v-model.trim="mask.settings.signature" placeholder="Signature payload" />
+              <a-form-item label="Profiles">
+                <a-button icon="plus" size="small"
+                  @click="mask.settings.profiles.push({username:'', uuid:'', texturesValue:'', texturesSignature:''})"></a-button>
               </a-form-item>
+              <template v-for="(profile, profileIndex) in mask.settings.profiles" :key="profileIndex">
+                <a-divider :style="{ margin: '0' }">
+                  Minecraft Profile [[ profileIndex + 1 ]]
+                  <a-icon type="delete" @click="mask.settings.profiles.splice(profileIndex, 1)"
+                    :style="{ color: 'rgb(255, 77, 79)', cursor: 'pointer' }"></a-icon>
+                </a-divider>
+                <a-form-item label="Username"><a-input v-model.trim="profile.username" /></a-form-item>
+                <a-form-item label="UUID"><a-input v-model.trim="profile.uuid" /></a-form-item>
+                <a-form-item label="Textures Value"><a-textarea v-model.trim="profile.texturesValue" :rows="2" /></a-form-item>
+                <a-form-item label="Textures Signature"><a-textarea v-model.trim="profile.texturesSignature" :rows="2" /></a-form-item>
+              </template>
             </template>
 
           </a-form>
@@ -1046,11 +1058,12 @@
               </template>
             </template>
             <template v-if="mask.type === 'xicmp'">
-              <a-form-item label="IP">
-                <a-input v-model.trim="mask.settings.ip" placeholder="0.0.0.0"></a-input>
+              <a-form-item label="Datagram mode">
+                <a-switch v-model="mask.settings.dgram"></a-switch>
               </a-form-item>
-              <a-form-item label="ID">
-                <a-input-number v-model.number="mask.settings.id" :min="0"></a-input-number>
+              <a-form-item label="IPs">
+                <a-select mode="tags" v-model="mask.settings.ips" :token-separators="[',']"
+                  placeholder="e.g. 1.1.1.1, 2606:4700:4700::1111"></a-select>
               </a-form-item>
             </template>
           </a-form>

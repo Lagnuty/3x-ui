@@ -39,9 +39,13 @@ func TestNormalizedFinalMaskTCPMasksKeepsCompleteXMC(t *testing.T) {
 			map[string]any{
 				"type": "xmc",
 				"settings": map[string]any{
-					"profile":   "chrome",
-					"texture":   "tex",
-					"signature": "sig",
+					"password": "secret",
+					"profiles": []any{map[string]any{
+						"username":          "player_1",
+						"uuid":              "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+						"texturesValue":     "texture",
+						"texturesSignature": "signature",
+					}},
 				},
 			},
 		},
@@ -53,8 +57,32 @@ func TestNormalizedFinalMaskTCPMasksKeepsCompleteXMC(t *testing.T) {
 		t.Fatalf("masks len = %d, want 1", len(masks))
 	}
 	settings := masks[0].(map[string]any)["settings"].(map[string]any)
-	if settings["profile"] != "chrome" || settings["texture"] != "tex" || settings["signature"] != "sig" {
+	if settings["password"] != "secret" || len(settings["profiles"].([]any)) != 1 {
 		t.Fatalf("xmc settings = %#v, want complete settings preserved", settings)
+	}
+}
+
+func TestNormalizedFinalMaskUDPMasksMigratesLatestCoreShapes(t *testing.T) {
+	finalmask := map[string]any{"udp": []any{
+		map[string]any{"type": "mkcp-aes128gcm", "settings": map[string]any{"password": "secret"}},
+		map[string]any{"type": "header-dtls", "settings": map[string]any{}},
+		map[string]any{"type": "xicmp", "settings": map[string]any{"ip": "1.1.1.1", "id": 7}},
+	}}
+	masks := normalizedFinalMaskUDPMasks(finalmask)
+	if len(masks) != 3 {
+		t.Fatalf("masks = %#v", masks)
+	}
+	first := masks[0].(map[string]any)
+	if first["type"] != "mkcp-legacy" || first["settings"].(map[string]any)["value"] != "secret" {
+		t.Fatalf("aes migration = %#v", first)
+	}
+	second := masks[1].(map[string]any)
+	if second["settings"].(map[string]any)["header"] != "dtls" {
+		t.Fatalf("header migration = %#v", second)
+	}
+	third := masks[2].(map[string]any)
+	if len(third["settings"].(map[string]any)["ips"].([]any)) != 1 {
+		t.Fatalf("xicmp migration = %#v", third)
 	}
 }
 

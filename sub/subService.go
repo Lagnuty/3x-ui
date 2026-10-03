@@ -1088,26 +1088,15 @@ var kcpMaskToHeaderType = map[string]string{
 }
 
 var validFinalMaskUDPTypes = map[string]struct{}{
-	"salamander":       {},
-	"mkcp-legacy":      {},
-	"mkcp-aes128gcm":   {},
-	"dns":              {},
-	"dtls":             {},
-	"srtp":             {},
-	"utp":              {},
-	"wechat":           {},
-	"wireguard":        {},
-	"header-dns":       {},
-	"header-dtls":      {},
-	"header-srtp":      {},
-	"header-utp":       {},
-	"header-wechat":    {},
-	"header-wireguard": {},
-	"mkcp-original":    {},
-	"xdns":             {},
-	"xicmp":            {},
-	"noise":            {},
-	"header-custom":    {},
+	"salamander":    {},
+	"mkcp-legacy":   {},
+	"sudoku":        {},
+	"xdns":          {},
+	"xicmp":         {},
+	"noise":         {},
+	"header-custom": {},
+	"realm":         {},
+	"udphop":        {},
 }
 
 var validFinalMaskTCPTypes = map[string]struct{}{
@@ -1451,10 +1440,25 @@ func normalizedFinalMaskTCPMasks(value any) []any {
 }
 
 func hasCompleteFinalMaskXMCSettings(settings map[string]any) bool {
-	for _, key := range []string{"profile", "texture", "signature"} {
+	for _, key := range []string{"password", "profiles"} {
 		value, exists := settings[key]
-		if !exists || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
+		if !exists || value == nil {
 			return false
+		}
+	}
+	profiles, ok := settings["profiles"].([]any)
+	if !ok || len(profiles) == 0 || strings.TrimSpace(fmt.Sprint(settings["password"])) == "" {
+		return false
+	}
+	for _, raw := range profiles {
+		profile, ok := raw.(map[string]any)
+		if !ok {
+			return false
+		}
+		for _, key := range []string{"username", "uuid", "texturesValue", "texturesSignature"} {
+			if strings.TrimSpace(fmt.Sprint(profile[key])) == "" || profile[key] == nil {
+				return false
+			}
 		}
 	}
 	return true
@@ -1476,6 +1480,7 @@ func normalizedFinalMaskUDPMasks(value any) []any {
 		if mask == nil {
 			continue
 		}
+		mask = normalizeLegacyFinalMaskUDP(mask)
 		maskType, _ := mask["type"].(string)
 		if _, ok := validFinalMaskUDPTypes[maskType]; !ok || maskType == "" {
 			continue
@@ -1492,6 +1497,33 @@ func normalizedFinalMaskUDPMasks(value any) []any {
 		return nil
 	}
 	return normalized
+}
+
+func normalizeLegacyFinalMaskUDP(mask map[string]any) map[string]any {
+	maskType, _ := mask["type"].(string)
+	settings, _ := mask["settings"].(map[string]any)
+	legacyHeader := strings.TrimPrefix(maskType, "header-")
+	switch maskType {
+	case "mkcp-aes128gcm":
+		return map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"value": settings["password"]}}
+	case "mkcp-original":
+		return map[string]any{"type": "mkcp-legacy"}
+	case "header-dns":
+		return map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"header": "dns", "value": settings["domain"]}}
+	case "header-dtls", "header-srtp", "header-utp", "header-wechat", "header-wireguard":
+		return map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"header": legacyHeader}}
+	case "xicmp":
+		if _, current := settings["ips"]; !current {
+			if ip, ok := settings["ip"].(string); ok && strings.TrimSpace(ip) != "" {
+				settings = cloneMap(settings)
+				settings["ips"] = []any{ip}
+				delete(settings, "ip")
+				delete(settings, "id")
+				return map[string]any{"type": "xicmp", "settings": settings}
+			}
+		}
+	}
+	return mask
 }
 
 func hasFinalMaskContent(value any) bool {
