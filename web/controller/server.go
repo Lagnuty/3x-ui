@@ -47,6 +47,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getPanelUpdateInfo", a.getPanelUpdateInfo)
 	g.GET("/getConfigJson", a.getConfigJson)
 	g.GET("/domainMatcherDiagnostics", a.getDomainMatcherDiagnostics)
+	g.GET("/xrayUpgradePlan/:version", a.getXrayUpgradePlan)
 	g.GET("/getDb", a.getDb)
 	g.GET("/getNewUUID", a.getNewUUID)
 	g.GET("/getNewX25519Cert", a.getNewX25519Cert)
@@ -213,6 +214,15 @@ func (a *ServerController) restartXrayService(c *gin.Context) {
 
 func (a *ServerController) getDomainMatcherDiagnostics(c *gin.Context) {
 	jsonObj(c, a.serverService.GetDomainMatcherDiagnostics(), nil)
+}
+
+func (a *ServerController) getXrayUpgradePlan(c *gin.Context) {
+	plan, err := a.serverService.GetXrayUpgradePlan(c.Param("version"))
+	if err != nil {
+		jsonMsg(c, "Failed to build Xray upgrade plan", err)
+		return
+	}
+	jsonObj(c, plan, nil)
 }
 
 // rebuildDomainMatcherCache clears the process-local cache by restarting Xray.

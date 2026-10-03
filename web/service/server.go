@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"mime/multipart"
 	stdnet "net"
 	"net/http"
@@ -135,6 +134,36 @@ type DomainMatcherDiagnostics struct {
 	Startup   xray.StartupDiagnostics `json:"startup"`
 	Geosite   GeoFileDiagnostic       `json:"geosite"`
 	GeoIP     GeoFileDiagnostic       `json:"geoip"`
+}
+
+type XrayCompatibilityCheckpoint struct {
+	Version string `json:"version"`
+	Title   string `json:"title"`
+	Impact  string `json:"impact"`
+	Active  bool   `json:"active"`
+}
+
+type XrayAffectedInbound struct {
+	ID       int      `json:"id"`
+	Remark   string   `json:"remark"`
+	Protocol string   `json:"protocol"`
+	Reasons  []string `json:"reasons"`
+}
+
+type XrayConfigDryRun struct {
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
+	InboundCount int    `json:"inboundCount"`
+	ConfigBytes  int    `json:"configBytes"`
+}
+
+type XrayUpgradePlan struct {
+	CurrentVersion string                        `json:"currentVersion"`
+	TargetVersion  string                        `json:"targetVersion"`
+	Matrix         []XrayCompatibilityCheckpoint `json:"matrix"`
+	Affected       []XrayAffectedInbound         `json:"affected"`
+	Warnings       []string                      `json:"warnings"`
+	DryRun         XrayConfigDryRun              `json:"dryRun"`
 }
 
 // ServerService provides business logic for server monitoring and management.
@@ -650,6 +679,151 @@ func (s *ServerService) GetXrayVersions() ([]string, error) {
 	return versions, nil
 }
 
+func xrayVersionNumber(version string) int {
+	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return 0
+	}
+	major, err1 := strconv.Atoi(parts[0])
+	minor, err2 := strconv.Atoi(parts[1])
+	patch, err3 := strconv.Atoi(parts[2])
+	if err1 != nil || err2 != nil || err3 != nil {
+		return 0
+	}
+	return major*1_000_000 + minor*1_000 + patch
+}
+
+func containsLegacyAllowInsecure(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, ok := typed["allowInsecure"]; ok {
+			return true
+		}
+		for _, child := range typed {
+			if containsLegacyAllowInsecure(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if containsLegacyAllowInsecure(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, error) {
+	target := xrayVersionNumber(version)
+	if target == 0 {
+		return nil, fmt.Errorf("invalid Xray version %q", version)
+	}
+	checkpoints := []XrayCompatibilityCheckpoint{
+		{Version: "v26.4.25", Title: "TLS verification and pinning", Impact: "Review allowInsecure and certificate verification fields."},
+		{Version: "v26.6.22", Title: "VLESS reverse compatibility", Impact: "Stable checkpoint after the v26.5.x reverse regression."},
+		{Version: "v26.6.27", Title: "Protocol/config validation", Impact: "Revalidate generated inbound and outbound configuration."},
+		{Version: "v26.7.28", Title: "REALITY client compatibility", Impact: "Review minClientVer and fingerprint compatibility."},
+		{Version: "v26.9.8", Title: "REALITY ML-KEM transition", Impact: "X25519MLKEM768 is required before optional X25519; empty minClientVer means no minimum."},
+		{Version: "v26.9.30", Title: "Deprecated feature diagnostics", Impact: "VMess, no-Flow configurations, legacy Shadowsocks and allowInsecure need migration."},
+	}
+	for i := range checkpoints {
+		checkpoints[i].Active = target >= xrayVersionNumber(checkpoints[i].Version)
+	}
+
+	plan := &XrayUpgradePlan{
+		CurrentVersion: s.xrayService.GetXrayVersion(),
+		TargetVersion:  version,
+		Matrix:         checkpoints,
+		Affected:       []XrayAffectedInbound{},
+		Warnings:       []string{},
+	}
+	inbounds, err := s.inboundService.GetAllInbounds()
+	if err != nil {
+		return nil, err
+	}
+	hasReality := false
+	for _, inbound := range inbounds {
+		reasons := []string{}
+		var settings map[string]any
+		var stream map[string]any
+		_ = json.Unmarshal([]byte(inbound.Settings), &settings)
+		_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+		security, _ := stream["security"].(string)
+		isReality := security == "reality"
+		if isReality {
+			hasReality = true
+		}
+		if target >= 26_009_008 && isReality {
+			reasons = append(reasons, "REALITY requires X25519MLKEM768 compatibility and new minClientVer semantics")
+		}
+		clients, _ := settings["clients"].([]any)
+		hasReverse := false
+		hasMissingFlow := false
+		for _, rawClient := range clients {
+			client, _ := rawClient.(map[string]any)
+			if client["reverse"] != nil {
+				hasReverse = true
+			}
+			if flow, _ := client["flow"].(string); flow == "" {
+				hasMissingFlow = true
+			}
+		}
+		if hasReverse && target >= 26_005_000 && target < 26_006_022 {
+			reasons = append(reasons, "target is in the known VLESS reverse regression range")
+		} else if hasReverse && target >= 26_006_022 {
+			reasons = append(reasons, "VLESS reverse should be tunnel-tested after the core switch")
+		}
+		if target >= 26_009_030 {
+			switch string(inbound.Protocol) {
+			case "vmess":
+				reasons = append(reasons, "VMess is deprecated")
+			case "trojan":
+				if hasMissingFlow {
+					reasons = append(reasons, "Trojan without Flow is deprecated")
+				}
+			case "vless":
+				if hasMissingFlow {
+					reasons = append(reasons, "VLESS clients without Flow are deprecated")
+				}
+			case "shadowsocks":
+				method, _ := settings["method"].(string)
+				if !strings.HasPrefix(method, "2022-") {
+					reasons = append(reasons, "legacy Shadowsocks cipher is deprecated")
+				}
+			}
+		}
+		if target >= 26_004_025 && (containsLegacyAllowInsecure(settings) || containsLegacyAllowInsecure(stream)) {
+			reasons = append(reasons, "legacy allowInsecure must be replaced with verification/pinning")
+		}
+		if len(reasons) > 0 {
+			plan.Affected = append(plan.Affected, XrayAffectedInbound{
+				ID: inbound.Id, Remark: inbound.Remark, Protocol: string(inbound.Protocol), Reasons: reasons,
+			})
+		}
+	}
+	if hasReality && target >= 26_009_008 {
+		plan.Warnings = append(plan.Warnings, "REALITY + Shadowrocket: verify that the client supports X25519MLKEM768. Raw vless:// links cannot carry Mihomo's support-x25519mlkem768 flag.")
+	}
+	if target >= 26_005_000 && target < 26_006_022 {
+		plan.Warnings = append(plan.Warnings, "This target is in the v26.5.x/v26.6.1 VLESS reverse regression range; v26.4.25 or v26.6.22+ is recommended.")
+	}
+
+	generated, generateErr := s.xrayService.GetXrayConfig()
+	if generateErr != nil {
+		plan.DryRun = XrayConfigDryRun{Success: false, Error: generateErr.Error()}
+		return plan, nil
+	}
+	data, marshalErr := json.MarshalIndent(generated, "", "  ")
+	if marshalErr != nil {
+		plan.DryRun = XrayConfigDryRun{Success: false, Error: marshalErr.Error()}
+		return plan, nil
+	}
+	plan.DryRun = XrayConfigDryRun{Success: true, InboundCount: len(generated.InboundConfigs), ConfigBytes: len(data)}
+	return plan, nil
+}
+
 func (s *ServerService) StopXrayService() error {
 	err := s.xrayService.StopXray()
 	if err != nil {
@@ -703,6 +877,9 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("download Xray %s failed: %s", version, resp.Status)
+	}
 
 	os.Remove(fileName)
 	file, err := os.Create(fileName)
@@ -720,12 +897,11 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 }
 
 func (s *ServerService) UpdateXray(version string) error {
-	// 1. Stop xray before doing anything
-	if err := s.StopXrayService(); err != nil {
-		logger.Warning("failed to stop xray before update:", err)
+	if xrayVersionNumber(version) == 0 {
+		return fmt.Errorf("invalid Xray version %q", version)
 	}
 
-	// 2. Download the zip
+	// Download and validate the candidate while the current core is still running.
 	zipFileName, err := s.downloadXRay(version)
 	if err != nil {
 		return err
@@ -747,41 +923,109 @@ func (s *ServerService) UpdateXray(version string) error {
 		return err
 	}
 
-	// 3. Helper to extract files
-	copyZipFile := func(zipName string, fileName string) error {
-		zipFile, err := reader.Open(zipName)
-		if err != nil {
-			return err
-		}
-		defer zipFile.Close()
-		os.MkdirAll(filepath.Dir(fileName), 0755)
-		os.Remove(fileName)
-		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, fs.ModePerm)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		_, err = io.Copy(file, zipFile)
+	zipBinaryName := "xray"
+	tempPattern := "xray-candidate-*"
+	if runtime.GOOS == "windows" {
+		zipBinaryName = "xray.exe"
+		tempPattern = "xray-candidate-*.exe"
+	}
+	archiveBinary, err := reader.Open(zipBinaryName)
+	if err != nil {
+		return fmt.Errorf("candidate binary is missing from archive: %w", err)
+	}
+	defer archiveBinary.Close()
+
+	binDir := config.GetBinFolderPath()
+	if err = os.MkdirAll(binDir, 0o755); err != nil {
 		return err
 	}
-
-	// 4. Extract correct binary
-	if runtime.GOOS == "windows" {
-		targetBinary := filepath.Join("bin", "xray-windows-amd64.exe")
-		err = copyZipFile("xray.exe", targetBinary)
-	} else {
-		err = copyZipFile("xray", xray.GetBinaryPath())
-	}
+	candidate, err := os.CreateTemp(binDir, tempPattern)
 	if err != nil {
 		return err
 	}
-
-	// 5. Restart xray
-	if err := s.xrayService.RestartXray(true); err != nil {
-		logger.Error("start xray failed:", err)
+	candidatePath := candidate.Name()
+	defer os.Remove(candidatePath)
+	if _, err = io.Copy(candidate, archiveBinary); err != nil {
+		candidate.Close()
+		return err
+	}
+	if err = candidate.Close(); err != nil {
+		return err
+	}
+	if err = os.Chmod(candidatePath, 0o755); err != nil {
 		return err
 	}
 
+	generated, err := s.xrayService.GetXrayConfig()
+	if err != nil {
+		return fmt.Errorf("config generation dry-run failed: %w", err)
+	}
+	configData, err := json.MarshalIndent(generated, "", "  ")
+	if err != nil {
+		return fmt.Errorf("config serialization dry-run failed: %w", err)
+	}
+	testConfig, err := os.CreateTemp(binDir, "xray-upgrade-*.json")
+	if err != nil {
+		return err
+	}
+	testConfigPath := testConfig.Name()
+	defer os.Remove(testConfigPath)
+	if _, err = testConfig.Write(configData); err != nil {
+		testConfig.Close()
+		return err
+	}
+	if err = testConfig.Close(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, candidatePath, "run", "-test", "-c", testConfigPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("target core rejected generated config: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+
+	targetBinary := xray.GetBinaryPath()
+	if runtime.GOOS == "windows" {
+		if _, statErr := os.Stat(targetBinary); os.IsNotExist(statErr) {
+			if _, exeErr := os.Stat(targetBinary + ".exe"); exeErr == nil {
+				targetBinary += ".exe"
+			}
+		}
+	}
+	if _, err = os.Stat(targetBinary); err != nil {
+		return fmt.Errorf("current Xray binary is unavailable for rollback: %w", err)
+	}
+	if err = s.StopXrayService(); err != nil {
+		logger.Warning("failed to stop xray before update:", err)
+	}
+
+	backupPath := fmt.Sprintf("%s.rollback-%d", targetBinary, time.Now().UnixNano())
+	if err = os.Rename(targetBinary, backupPath); err != nil {
+		_ = s.xrayService.RestartXray(true)
+		return fmt.Errorf("failed to create Xray rollback backup: %w", err)
+	}
+	rollback := func(updateErr error) error {
+		_ = s.xrayService.StopXray()
+		_ = os.Remove(targetBinary)
+		if restoreErr := os.Rename(backupPath, targetBinary); restoreErr != nil {
+			return fmt.Errorf("%v; automatic rollback failed: %w", updateErr, restoreErr)
+		}
+		if restartErr := s.xrayService.RestartXray(true); restartErr != nil {
+			return fmt.Errorf("%v; previous core restored but failed to start: %w", updateErr, restartErr)
+		}
+		return fmt.Errorf("%v; previous core restored and restarted", updateErr)
+	}
+
+	if err = os.Rename(candidatePath, targetBinary); err != nil {
+		return rollback(fmt.Errorf("failed to activate target core: %w", err))
+	}
+	if err = s.xrayService.RestartXray(true); err != nil {
+		logger.Error("target Xray failed to start, rolling back:", err)
+		return rollback(fmt.Errorf("target Xray failed to start: %w", err))
+	}
+	if err = os.Remove(backupPath); err != nil && !os.IsNotExist(err) {
+		logger.Warning("failed to remove Xray rollback backup:", err)
+	}
 	return nil
 }
 

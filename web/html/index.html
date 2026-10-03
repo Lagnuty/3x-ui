@@ -360,13 +360,51 @@
       <a-collapse-panel key="1" header='Xray'>
         <a-alert type="warning" class="mb-12 w-100" message='{{ i18n "pages.index.xraySwitchClickDesk" }}'
           show-icon></a-alert>
-        <a-list class="ant-version-list w-100" bordered>
+        <a-list class="ant-version-list w-100" bordered :loading="versionModal.planLoading">
           <a-list-item class="ant-version-list-item" v-for="version, index in versionModal.versions">
             <a-tag :color="index % 2 == 0 ? 'purple' : 'green'">[[ version ]]</a-tag>
             <a-radio :class="themeSwitcher.currentTheme" :checked="version === `v${status.xray.version}`"
               @click="switchV2rayVersion(version)"></a-radio>
           </a-list-item>
         </a-list>
+        <a-card v-if="versionModal.plan" size="small" :style="{ marginTop: '12px' }"
+          :title="`Upgrade plan: ${versionModal.plan.currentVersion} → ${versionModal.plan.targetVersion}`">
+          <a-alert :type="versionModal.plan.dryRun.success ? 'success' : 'error'" show-icon
+            :message="versionModal.plan.dryRun.success ? 'Config generation dry-run passed' : 'Config generation dry-run failed'"
+            :description="versionModal.plan.dryRun.success
+              ? `${versionModal.plan.dryRun.inboundCount} inbounds, ${versionModal.plan.dryRun.configBytes} bytes`
+              : versionModal.plan.dryRun.error">
+          </a-alert>
+          <a-alert v-for="warning, index in versionModal.plan.warnings" :key="`warning-${index}`"
+            type="warning" show-icon :style="{ marginTop: '8px' }" :message="warning"></a-alert>
+          <a-collapse :bordered="false" :style="{ marginTop: '8px' }">
+            <a-collapse-panel key="matrix" header="Compatibility matrix">
+              <a-list size="small" :data-source="versionModal.plan.matrix">
+                <a-list-item slot="renderItem" slot-scope="checkpoint">
+                  <a-list-item-meta :title="`${checkpoint.version} — ${checkpoint.title}`"
+                    :description="checkpoint.impact"></a-list-item-meta>
+                  <a-tag :color="checkpoint.active ? 'blue' : 'default'">[[ checkpoint.active ? 'included' : 'later' ]]</a-tag>
+                </a-list-item>
+              </a-list>
+            </a-collapse-panel>
+            <a-collapse-panel key="affected" :header="`Affected inbounds (${versionModal.plan.affected.length})`">
+              <a-empty v-if="versionModal.plan.affected.length === 0" description="No affected inbounds detected"></a-empty>
+              <a-list v-else size="small" :data-source="versionModal.plan.affected">
+                <a-list-item slot="renderItem" slot-scope="inbound">
+                  <a-list-item-meta :title="`#${inbound.id} ${inbound.remark} (${inbound.protocol})`"
+                    :description="inbound.reasons.join('; ')"></a-list-item-meta>
+                </a-list-item>
+              </a-list>
+            </a-collapse-panel>
+          </a-collapse>
+          <a-alert type="info" show-icon :style="{ marginTop: '8px' }"
+            message="The selected core will validate the generated config before activation. If startup fails, the previous binary is restored and restarted automatically.">
+          </a-alert>
+          <div class="mt-5 d-flex justify-end">
+            <a-button type="primary" icon="cloud-download" :disabled="!versionModal.plan.dryRun.success"
+              @click="confirmXrayUpgrade">Install [[ versionModal.plan.targetVersion ]]</a-button>
+          </div>
+        </a-card>
       </a-collapse-panel>
       <a-collapse-panel key="2" header='Geofiles'>
         <a-list class="ant-version-list w-100" bordered>
@@ -935,10 +973,14 @@
     visible: false,
     activeKey: '1',
     versions: [],
+    plan: null,
+    planLoading: false,
     show(versions, activeKey = '1') {
       this.visible = true;
       this.activeKey = activeKey;
       this.versions = versions;
+      this.plan = null;
+      this.planLoading = false;
     },
     hide() {
       this.visible = false;
@@ -1383,20 +1425,21 @@
           this.customGeoUpdatingAll = false;
         }
       },
-      switchV2rayVersion(version) {
-        this.$confirm({
-          title: '{{ i18n "pages.index.xraySwitchVersionDialog"}}',
-          content: '{{ i18n "pages.index.xraySwitchVersionDialogDesc"}}'.replace('#version#', version),
-          okText: '{{ i18n "confirm"}}',
-          class: themeSwitcher.currentTheme,
-          cancelText: '{{ i18n "cancel"}}',
-          onOk: async () => {
-            versionModal.hide();
-            this.loading(true, '{{ i18n "pages.index.dontRefresh"}}');
-            await HttpUtil.post(`/panel/api/server/installXray/${version}`);
-            this.loading(false);
-          },
-        });
+      async switchV2rayVersion(version) {
+        versionModal.planLoading = true;
+        versionModal.plan = null;
+        const msg = await HttpUtil.get(`/panel/api/server/xrayUpgradePlan/${version}`);
+        versionModal.planLoading = false;
+        if (msg.success) versionModal.plan = msg.obj;
+      },
+      async confirmXrayUpgrade() {
+        const version = versionModal.plan?.targetVersion;
+        if (!version || !versionModal.plan?.dryRun?.success) return;
+        versionModal.hide();
+        this.loading(true, '{{ i18n "pages.index.dontRefresh"}}');
+        const msg = await HttpUtil.post(`/panel/api/server/installXray/${version}`);
+        this.loading(false);
+        if (msg.success) await this.getStatus();
       },
       updatePanel() {
         this.$confirm({
