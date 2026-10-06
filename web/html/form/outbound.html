@@ -603,7 +603,7 @@
             <a-switch v-model="outbound.stream.xhttp.noGRPCHeader"></a-switch>
           </a-form-item>
           <a-form-item label="Min Upload Interval (Ms)" v-if="outbound.stream.xhttp.mode === 'packet-up'">
-            <a-input v-model.trim="outbound.stream.xhttp.scMinPostsIntervalMs" placeholder="core default; old panels used 30"></a-input>
+            <a-input v-model.trim="outbound.stream.xhttp.scMinPostsIntervalMs" placeholder='{{ i18n "pages.inbounds.coreDefaultOld30" }}'></a-input>
           </a-form-item>
           <a-form-item label="Session ID Placement">
             <a-select v-model="outbound.stream.xhttp.sessionIDPlacement" :dropdown-class-name="themeSwitcher.currentTheme">
@@ -630,7 +630,7 @@
           </a-form-item>
           <template v-if="outbound.stream.xhttp.enableXmux">
             <a-alert type="warning" show-icon
-              message="Core-dependent defaults: Xray v26.7.28+ may use lower fallback concurrency (3 instead of older 6). Disable XMUX to let the core decide."
+              message='{{ i18n "pages.inbounds.xmuxCoreDefaultsHint" }}'
               style="margin-bottom: 12px"></a-alert>
             <a-form-item label="Max Concurrency">
               <a-input v-model="outbound.stream.xhttp.xmux.maxConcurrency" placeholder="16-32"></a-input>
@@ -1199,7 +1199,7 @@
           </a-form-item>
           <a-form-item label="Pinned Peer Cert SHA256"
             :validate-status="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? 'success' : 'error'"
-            :help="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? '' : 'Use one or more 64-character hex SHA256 values separated by commas'">
+            :help="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? '' : '{{ i18n "pages.inbounds.tlsPinHelp" }}'">
             <a-input v-model.trim="outbound.stream.tls.pinnedPeerCertSha256" @change="outModal.check()"
               placeholder="64 hex characters; comma-separated">
             </a-input>
@@ -1210,7 +1210,7 @@
             </a-input>
           </a-form-item>
           <a-alert class="mb-12" type="warning" show-icon
-            message="allowInsecure is removed in current Xray cores. Pin the leaf certificate, or combine a CA pin with ServerName/Verify Peer Cert By Name. Re-fetch leaf pins after certificate rotation.">
+            message='{{ i18n "pages.inbounds.allowInsecureRemovedHint" }}'>
           </a-alert>
         </template>
 

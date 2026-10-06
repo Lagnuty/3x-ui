@@ -10,7 +10,7 @@ on:
       version:
         description: Image version tag
         required: true
-        default: 2.9.4-21
+        default: 2.9.4-22
       stable_version:
         description: Stable release alias
         required: true

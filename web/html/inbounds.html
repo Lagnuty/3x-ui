@@ -194,7 +194,7 @@
                         }}</a-radio-button>
                       <a-radio-button value="online">{{ i18n "online"
                         }}</a-radio-button>
-                      <a-radio-button value="deprecated">Deprecated</a-radio-button>
+                      <a-radio-button value="deprecated">{{ i18n "pages.inbounds.deprecatedFilter" }}</a-radio-button>
                     </a-radio-group>
                   </div>
                   <a-table :columns="isMobile ? mobileColumns : columns" :row-key="dbInbound => dbInbound.id"
@@ -216,7 +216,7 @@
                           </a-menu-item>
                           <a-menu-item key="convertModern" v-if="dbInbound.isDeprecated">
                             <a-icon type="safety-certificate"></a-icon>
-                            Convert to VLESS Reality/Vision
+                            {{ i18n "pages.inbounds.convertModern" }}
                           </a-menu-item>
                           <a-menu-item key="qrcode"
                             v-if="(dbInbound.isSS && !dbInbound.toInbound().isSSMultiUser) || dbInbound.isWireguard">
@@ -289,18 +289,18 @@
                     <template slot="protocol" slot-scope="text, dbInbound">
                       <div class="protocol-tags">
                         <a-tag color="purple">[[ dbInbound.protocol ]]</a-tag>
-                        <a-popover v-if="dbInbound.isDeprecated" title="Deprecated configuration"
+                        <a-popover v-if="dbInbound.isDeprecated" title='{{ i18n "pages.inbounds.deprecatedConfiguration" }}'
                           :overlay-class-name="themeSwitcher.currentTheme">
                           <template slot="content">
                             <div v-for="warning in dbInbound.getDeprecationWarnings()" :key="warning.code"
                               :style="{ maxWidth: '360px', marginBottom: '8px' }">
-                              <strong>[[ warning.title ]]</strong><br>
-                              <span>[[ warning.recommendation ]]</span>
+                              <strong>[[ deprecationTitle(warning) ]]</strong><br>
+                              <span>[[ deprecationRecommendation(warning) ]]</span>
                             </div>
                           </template>
-                          <a-tag color="orange"><a-icon type="warning"></a-icon> deprecated</a-tag>
+                          <a-tag color="orange"><a-icon type="warning"></a-icon> {{ i18n "pages.inbounds.deprecatedTag" }}</a-tag>
                         </a-popover>
-                        <a-tag v-if="dbInbound.isTun" color="cyan">TUN stats</a-tag>
+                        <a-tag v-if="dbInbound.isTun" color="cyan">{{ i18n "pages.inbounds.tunStatsTag" }}</a-tag>
                         <template
                           v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
                           <a-tag color="green">[[ dbInbound.toInbound().stream.network ]]</a-tag>
@@ -678,51 +678,51 @@
       </a-spin>
     </a-layout-content>
   </a-layout>
-  <a-modal v-model="migrationWizard.visible" title="Convert to VLESS REALITY/Vision"
-    :confirm-loading="migrationWizard.loading" ok-text="Convert" cancel-text='{{ i18n "cancel" }}'
+  <a-modal v-model="migrationWizard.visible" title='{{ i18n "pages.inbounds.convertModern" }}'
+    :confirm-loading="migrationWizard.loading" ok-text='{{ i18n "pages.inbounds.convert" }}' cancel-text='{{ i18n "cancel" }}'
     :class="themeSwitcher.currentTheme" :mask-closable="false" width="720px" @ok="convertDeprecatedInbound">
     <a-alert type="warning" show-icon :style="{ marginBottom: '12px' }"
-      message="Review client impact before conversion"
+      message='{{ i18n "pages.inbounds.migrationReviewTitle" }}'
       :description="migrationWizard.credentialsRotate
-        ? 'Trojan/Shadowsocks credentials cannot be reused as VLESS UUIDs. New UUIDs will be generated and client links must be redistributed.'
-        : 'Existing UUIDs and quota metadata will be preserved. Client links still change because transport/security becomes REALITY/Vision.'">
+        ? '{{ i18n "pages.inbounds.migrationRotateDesc" }}'
+        : '{{ i18n "pages.inbounds.migrationPreserveDesc" }}'">
     </a-alert>
     <a-form layout="vertical">
-      <a-form-item label="Migration mode">
+      <a-form-item label='{{ i18n "pages.inbounds.migrationMode" }}'>
         <a-radio-group v-model="migrationWizard.mode" button-style="solid">
-          <a-radio-button value="clone">Clone (recommended)</a-radio-button>
-          <a-radio-button value="replace">Replace existing inbound</a-radio-button>
+          <a-radio-button value="clone">{{ i18n "pages.inbounds.migrationClone" }}</a-radio-button>
+          <a-radio-button value="replace">{{ i18n "pages.inbounds.migrationReplace" }}</a-radio-button>
         </a-radio-group>
-        <div v-if="migrationWizard.mode === 'clone'">The old inbound stays enabled; the new inbound receives a random port.</div>
-        <div v-else style="color: #fa8c16;">The existing inbound and its share links will be replaced.</div>
+        <div v-if="migrationWizard.mode === 'clone'">{{ i18n "pages.inbounds.migrationCloneDesc" }}</div>
+        <div v-else style="color: #fa8c16;">{{ i18n "pages.inbounds.migrationReplaceDesc" }}</div>
       </a-form-item>
       <a-row :gutter="12">
         <a-col :span="12">
-          <a-form-item label="REALITY target">
+          <a-form-item label='{{ i18n "pages.inbounds.realityTarget" }}'>
             <a-input v-model.trim="migrationWizard.target" placeholder="www.amazon.com:443"></a-input>
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="Server name (SNI)">
+          <a-form-item label='{{ i18n "pages.inbounds.serverNameSni" }}'>
             <a-input v-model.trim="migrationWizard.serverName" placeholder="www.amazon.com"></a-input>
           </a-form-item>
         </a-col>
       </a-row>
-      <a-form-item label="Client compatibility">
+      <a-form-item label='{{ i18n "pages.inbounds.clientCompatibility" }}'>
         <a-radio-group v-model="migrationWizard.profile">
-          <a-radio value="compatibility">Compatibility — no minimum client version</a-radio>
-          <a-radio value="strict">Strict modern — minimum 26.9.8</a-radio>
+          <a-radio value="compatibility">{{ i18n "pages.inbounds.compatibilityProfile" }}</a-radio>
+          <a-radio value="strict">{{ i18n "pages.inbounds.strictModernProfile" }}</a-radio>
         </a-radio-group>
       </a-form-item>
       <a-collapse :bordered="false">
-        <a-collapse-panel key="warnings" :header="`Detected warnings (${migrationWizard.warnings.length})`">
+        <a-collapse-panel key="warnings" :header="`{{ i18n "pages.inbounds.detectedWarnings" }} (${migrationWizard.warnings.length})`">
           <a-list size="small" :data-source="migrationWizard.warnings">
             <a-list-item slot="renderItem" slot-scope="warning">
-              <a-list-item-meta :title="warning.title" :description="warning.recommendation"></a-list-item-meta>
+              <a-list-item-meta :title="deprecationTitle(warning)" :description="deprecationRecommendation(warning)"></a-list-item-meta>
             </a-list-item>
           </a-list>
         </a-collapse-panel>
-        <a-collapse-panel key="clients" :header="`Client mapping preview (${migrationWizard.clients.length})`">
+        <a-collapse-panel key="clients" :header="`{{ i18n "pages.inbounds.clientMappingPreview" }} (${migrationWizard.clients.length})`">
           <div v-for="client in migrationWizard.clients" :key="client.newId" style="word-break: break-all; margin-bottom: 6px;">
             <a-tag>[[ client.email || 'unnamed' ]]</a-tag>
             [[ client.oldCredential ]] → [[ client.newId ]]
@@ -1148,6 +1148,28 @@
       },
     },
     methods: {
+      deprecationTitle(warning) {
+        const titles = {
+          'vmess': '{{ i18n "pages.inbounds.depVmessTitle" }}',
+          'trojan-no-flow': '{{ i18n "pages.inbounds.depTrojanNoFlowTitle" }}',
+          'vless-no-flow': '{{ i18n "pages.inbounds.depVlessNoFlowTitle" }}',
+          'shadowsocks-legacy': '{{ i18n "pages.inbounds.depShadowsocksLegacyTitle" }}',
+          'grpc-transport': '{{ i18n "pages.inbounds.depGrpcTitle" }}',
+          'allow-insecure': '{{ i18n "pages.inbounds.depAllowInsecureTitle" }}',
+        };
+        return (titles[warning.code] || warning.title || '').replace('#count#', warning.count ?? '');
+      },
+      deprecationRecommendation(warning) {
+        const recommendations = {
+          'vmess': '{{ i18n "pages.inbounds.depVmessDesc" }}',
+          'trojan-no-flow': '{{ i18n "pages.inbounds.depTrojanNoFlowDesc" }}',
+          'vless-no-flow': '{{ i18n "pages.inbounds.depVlessNoFlowDesc" }}',
+          'shadowsocks-legacy': '{{ i18n "pages.inbounds.depShadowsocksLegacyDesc" }}',
+          'grpc-transport': '{{ i18n "pages.inbounds.depGrpcDesc" }}',
+          'allow-insecure': '{{ i18n "pages.inbounds.depAllowInsecureDesc" }}',
+        };
+        return recommendations[warning.code] || warning.recommendation || '';
+      },
       loading(spinning = true) {
         this.loadingStates.spinning = spinning;
       },

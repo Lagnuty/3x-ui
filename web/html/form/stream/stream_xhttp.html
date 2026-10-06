@@ -1,7 +1,7 @@
 {{define "form/streamXHTTP"}}
 <a-form :colon="false" :label-col="{ md: {span:8} }" :wrapper-col="{ md: {span:14} }">
   <a-alert type="info" show-icon
-    message="Experimental: XHTTP padding and XMUX defaults depend on Xray core version; v26.7.28+ lowers fallback concurrency behavior."
+    message='{{ i18n "pages.inbounds.xhttpExperimentalHint" }}'
     style="margin-bottom: 12px"></a-alert>
   <a-form-item label='{{ i18n "host" }}'>
     <a-input v-model.trim="inbound.stream.xhttp.host"></a-input>
@@ -39,7 +39,7 @@
   </a-form-item>
   <a-form-item label="Min Upload Interval (Ms)" v-if="inbound.stream.xhttp.mode === 'packet-up'">
     <a-input v-model.trim="inbound.stream.xhttp.scMinPostsIntervalMs"
-      placeholder="Core default; old panels forced 30"></a-input>
+      placeholder='{{ i18n "pages.inbounds.coreDefaultOld30" }}'></a-input>
   </a-form-item>
   <a-form-item label="Stream-Up Server" v-if="inbound.stream.xhttp.mode === 'stream-up'">
     <a-input v-model.trim="inbound.stream.xhttp.scStreamUpServerSecs"></a-input>
@@ -146,7 +146,7 @@
   </a-form-item>
   <template v-if="inbound.stream.xhttp.enableXmux">
     <a-alert type="warning" show-icon
-      message="Core-dependent defaults: Xray v26.7.28+ may use lower fallback concurrency (3 instead of older 6). Leave XMUX disabled to let the core decide."
+      message='{{ i18n "pages.inbounds.xmuxCoreDefaultsHint" }}'
       style="margin-bottom: 12px"></a-alert>
     <a-form-item label="Max Concurrency">
       <a-input v-model="inbound.stream.xhttp.xmux.maxConcurrency" placeholder="16-32"></a-input>

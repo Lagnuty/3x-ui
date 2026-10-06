@@ -792,6 +792,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 			reasons = append(reasons, "VLESS reverse should be tunnel-tested after the core switch")
 		}
 		if target >= 26_009_009 {
+			isTCPVisionTransport := network == "tcp" && (security == "tls" || security == "reality")
 			switch string(inbound.Protocol) {
 			case "vmess":
 				reasons = append(reasons, "VMess is deprecated")
@@ -800,7 +801,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 					reasons = append(reasons, "Trojan without Flow is deprecated")
 				}
 			case "vless":
-				if hasMissingFlow {
+				if hasMissingFlow && isTCPVisionTransport {
 					reasons = append(reasons, "VLESS clients without Flow are deprecated")
 				}
 			case "shadowsocks":

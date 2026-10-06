@@ -66,7 +66,7 @@
     </a-form-item>
     <a-form-item label="Trusted X-Forwarded-For">
       <a-alert v-if="['ws', 'httpupgrade', 'xhttp', 'grpc'].includes(inbound.stream.network)" type="info" show-icon
-        message="Real client IP behind CDN/relay: Xray v26.6.22+ also resolves gRPC client IP from trusted forwarded headers."
+        message='{{ i18n "pages.inbounds.realClientIpGrpcHint" }}'
         style="margin-bottom: 12px"></a-alert>
       <a-space style="margin-bottom: 8px">
         <a-button size="small"

@@ -73,8 +73,8 @@ class DBInbound {
         try { settings = JSON.parse(this.settings || '{}'); } catch (_) {}
         try { stream = JSON.parse(this.streamSettings || '{}'); } catch (_) {}
         const warnings = [];
-        const add = (code, title, recommendation, severity = 'warning') => {
-            warnings.push({ code, title, recommendation, severity });
+        const add = (code, title, recommendation, severity = 'warning', meta = {}) => {
+            warnings.push({ code, title, recommendation, severity, ...meta });
         };
 
         if (this.protocol === Protocols.VMESS) {
@@ -89,8 +89,9 @@ class DBInbound {
         if (this.protocol === Protocols.VLESS) {
             const clients = Array.isArray(settings.clients) ? settings.clients : [];
             const withoutFlow = clients.filter(client => !client.flow).length;
-            if (withoutFlow > 0) {
-                add('vless-no-flow', `VLESS without Flow (${withoutFlow} client${withoutFlow === 1 ? '' : 's'})`, 'Enable xtls-rprx-vision on a TCP TLS/REALITY inbound.');
+            const isTcpVisionTransport = stream.network === 'tcp' && ['tls', 'reality'].includes(stream.security);
+            if (withoutFlow > 0 && isTcpVisionTransport) {
+                add('vless-no-flow', `VLESS without Flow (${withoutFlow} client${withoutFlow === 1 ? '' : 's'})`, 'Enable xtls-rprx-vision on a TCP TLS/REALITY inbound.', 'warning', { count: withoutFlow });
             }
         }
         if (this.protocol === Protocols.SHADOWSOCKS) {
