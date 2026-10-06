@@ -1,0 +1,325 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' openflux-page'">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loading" :delay="400" tip='{{ i18n "loading"}}' size="large">
+        <a-row :gutter="[16, 16]">
+          <a-col :xs="24" :lg="15">
+            <a-card>
+              <div class="openflux-toolbar">
+                <a-space>
+                  <a-button type="primary" icon="plus" @click="openForm()">{{ i18n "pages.openflux.add" }}</a-button>
+                  <a-button icon="reload" @click="fetchAll">{{ i18n "pages.openflux.refresh" }}</a-button>
+                </a-space>
+                <a-tag v-if="installInfo.installedVersion" color="green">openflux [[ installInfo.installedVersion ]]</a-tag>
+                <a-tag v-else color="orange">{{ i18n "pages.openflux.binaryMissing" }}</a-tag>
+              </div>
+              <a-table :columns="columns" :data-source="nodes" :row-key="row => row.id" size="middle"
+                :pagination="{ pageSize: 8 }">
+                <template slot="enabled" slot-scope="enabled">
+                  <a-tag :color="enabled ? 'green' : 'default'">[[ enabled ? '{{ i18n "enabled" }}' : '{{ i18n "disabled" }}' ]]</a-tag>
+                </template>
+                <template slot="transport" slot-scope="transport">
+                  <a-tag color="blue">[[ transport ]]</a-tag>
+                </template>
+                <template slot="url" slot-scope="url">
+                  <a-tooltip :title="url">
+                    <span>[[ maskUrl(url) ]]</span>
+                  </a-tooltip>
+                </template>
+                <template slot="actions" slot-scope="text, record">
+                  <a-space>
+                    <a-tooltip title='{{ i18n "edit" }}'>
+                      <a-button size="small" icon="edit" @click="openForm(record)"></a-button>
+                    </a-tooltip>
+                    <a-tooltip title='{{ i18n "pages.openflux.status" }}'>
+                      <a-button size="small" icon="dashboard" @click="loadStatus(record)"></a-button>
+                    </a-tooltip>
+                    <a-dropdown>
+                      <a-button size="small" icon="more"></a-button>
+                      <a-menu slot="overlay" @click="({key}) => runAction(key, record)">
+                        <a-menu-item key="start">{{ i18n "pages.openflux.start" }}</a-menu-item>
+                        <a-menu-item key="restart">{{ i18n "pages.openflux.restart" }}</a-menu-item>
+                        <a-menu-item key="stop">{{ i18n "pages.openflux.stop" }}</a-menu-item>
+                        <a-menu-divider></a-menu-divider>
+                        <a-menu-item key="apply">{{ i18n "pages.openflux.applyUnit" }}</a-menu-item>
+                        <a-menu-item key="unit">{{ i18n "pages.openflux.unitPreview" }}</a-menu-item>
+                        <a-menu-divider></a-menu-divider>
+                        <a-menu-item key="delete">{{ i18n "delete" }}</a-menu-item>
+                      </a-menu>
+                    </a-dropdown>
+                  </a-space>
+                </template>
+              </a-table>
+            </a-card>
+          </a-col>
+          <a-col :xs="24" :lg="9">
+            <a-card class="openflux-binary" title='{{ i18n "pages.openflux.binaryManager" }}'>
+              <a-descriptions :column="1" size="small" bordered>
+                <a-descriptions-item label='{{ i18n "pages.openflux.version" }}'>
+                  [[ installInfo.installedVersion || '{{ i18n "pages.openflux.binaryMissing" }}' ]]
+                </a-descriptions-item>
+                <a-descriptions-item label="GitHub">
+                  <span class="openflux-mono">[[ shortCommit(installInfo.latestCommit) || '-' ]]</span>
+                </a-descriptions-item>
+                <a-descriptions-item label="Path">
+                  <span class="openflux-mono">[[ installInfo.path || '/usr/local/bin/openflux' ]]</span>
+                </a-descriptions-item>
+              </a-descriptions>
+              <a-input-search v-model.trim="installRef" class="openflux-install-input"
+                enter-button='{{ i18n "pages.openflux.install" }}' :loading="installing"
+                placeholder="HEAD, main, tag или commit" @search="installBinary"></a-input-search>
+            </a-card>
+            <a-card class="openflux-status-card" :title="selected ? selected.name : '{{ i18n "pages.openflux.status" }}'">
+              <template v-if="status">
+                <a-descriptions :column="1" size="small" bordered>
+                  <a-descriptions-item label="Unit">[[ status.unitName ]]</a-descriptions-item>
+                  <a-descriptions-item label='{{ i18n "status" }}'>
+                    <a-tag :color="status.active ? 'green' : 'orange'">[[ status.state || '-' ]]</a-tag>
+                  </a-descriptions-item>
+                  <a-descriptions-item label='{{ i18n "pages.openflux.lastRestart" }}'>[[ status.lastRestartAt || '-' ]]</a-descriptions-item>
+                  <a-descriptions-item label='{{ i18n "pages.openflux.version" }}'>[[ status.version || '-' ]]</a-descriptions-item>
+                </a-descriptions>
+                <a-textarea class="openflux-logs" :value="status.logs || ''" :rows="14" readonly></a-textarea>
+              </template>
+              <a-empty v-else :description="'{{ i18n "pages.openflux.noStatus" }}'"></a-empty>
+            </a-card>
+          </a-col>
+        </a-row>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+
+  <a-modal v-model="formVisible" :title="form.id ? '{{ i18n "pages.openflux.edit" }}' : '{{ i18n "pages.openflux.add" }}'"
+    :ok-text="'{{ i18n "save" }}'" :cancel-text="'{{ i18n "cancel" }}'" :confirm-loading="saving" @ok="saveForm"
+    :wrap-class-name="themeSwitcher.currentTheme">
+    <a-form layout="vertical">
+      <a-form-item label='{{ i18n "pages.openflux.name" }}'>
+        <a-input v-model.trim="form.name" placeholder="nl2 Yandex Docs"></a-input>
+      </a-form-item>
+      <a-row :gutter="12">
+        <a-col :span="12">
+          <a-form-item label='{{ i18n "pages.openflux.serverId" }}'>
+            <a-input v-model.trim="form.serverId" placeholder="nl2"></a-input>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label='{{ i18n "pages.openflux.transport" }}'>
+            <a-select v-model="form.transport">
+              <a-select-option value="yandex">Yandex Docs</a-select-option>
+              <a-select-option value="vyandex">Volga WS</a-select-option>
+              <a-select-option value="boards">Boards / Cursor WS</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="URL">
+        <a-input v-model.trim="form.url" placeholder="https://disk.yandex.ru/i/..."></a-input>
+      </a-form-item>
+      <a-row :gutter="12">
+        <a-col :span="8">
+          <a-form-item label='{{ i18n "pages.openflux.mode" }}'>
+            <a-select v-model="form.mode">
+              <a-select-option value="l4">l4</a-select-option>
+              <a-select-option value="l3">l3</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label='{{ i18n "pages.openflux.codec" }}'>
+            <a-select v-model="form.codec">
+              <a-select-option value="batched">batched</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label='{{ i18n "pages.openflux.debug" }}'>
+            <a-input-number v-model="form.debug" :min="0" :max="3" style="width: 100%"></a-input-number>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label='{{ i18n "pages.openflux.keyFile" }}'>
+        <a-input v-model.trim="form.encryptionKeyFile" placeholder="/etc/openflux/key"></a-input>
+      </a-form-item>
+      <a-form-item>
+        <a-switch v-model="form.enabled"></a-switch>
+        <span style="margin-left: 8px">{{ i18n "enable" }}</span>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model="unitVisible" title='{{ i18n "pages.openflux.unitPreview" }}' :footer="null"
+    :wrap-class-name="themeSwitcher.currentTheme" width="760px">
+    <a-textarea :value="unitText" :rows="18" readonly></a-textarea>
+  </a-modal>
+</a-layout>
+
+{{template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+<style>
+  .openflux-toolbar {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .openflux-logs {
+    font-family: Consolas, Menlo, monospace;
+    margin-top: 12px;
+  }
+
+  .openflux-binary,
+  .openflux-status-card {
+    margin-bottom: 16px;
+  }
+
+  .openflux-install-input {
+    margin-top: 12px;
+  }
+
+  .openflux-mono {
+    font-family: Consolas, Menlo, monospace;
+  }
+
+  @media (max-width: 768px) {
+    .openflux-toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>
+<script>
+  const defaultOpenFluxForm = () => ({
+    id: 0,
+    name: '',
+    serverId: '',
+    transport: 'yandex',
+    url: '',
+    mode: 'l4',
+    codec: 'batched',
+    debug: 1,
+    enabled: true,
+    encryptionKeyFile: ''
+  });
+
+  const app = new Vue({
+    delimiters: ['[[', ']]'],
+    el: '#app',
+    data: {
+      themeSwitcher,
+      loading: false,
+      saving: false,
+      installing: false,
+      nodes: [],
+      installInfo: {},
+      installRef: 'HEAD',
+      selected: null,
+      status: null,
+      formVisible: false,
+      unitVisible: false,
+      unitText: '',
+      form: defaultOpenFluxForm(),
+      columns: [
+        { title: '{{ i18n "pages.openflux.name" }}', dataIndex: 'name' },
+        { title: '{{ i18n "pages.openflux.serverId" }}', dataIndex: 'serverId' },
+        { title: '{{ i18n "pages.openflux.transport" }}', dataIndex: 'transport', scopedSlots: { customRender: 'transport' } },
+        { title: 'URL', dataIndex: 'url', scopedSlots: { customRender: 'url' } },
+        { title: '{{ i18n "status" }}', dataIndex: 'enabled', scopedSlots: { customRender: 'enabled' } },
+        { title: '', key: 'actions', scopedSlots: { customRender: 'actions' }, width: 150 }
+      ],
+    },
+    methods: {
+      maskUrl(url) {
+        if (!url) return '';
+        try {
+          const parsed = new URL(url);
+          return `${parsed.host}${parsed.pathname.substring(0, 24)}${parsed.pathname.length > 24 ? '...' : ''}`;
+        } catch (e) {
+          return url.length > 32 ? `${url.substring(0, 32)}...` : url;
+        }
+      },
+      async fetchAll() {
+        this.loading = true;
+        const [listMsg, installMsg] = await Promise.all([
+          HttpUtil.get('/panel/api/openflux/list'),
+          HttpUtil.get('/panel/api/openflux/install-info')
+        ]);
+        this.loading = false;
+        if (listMsg.success) this.nodes = listMsg.obj || [];
+        if (installMsg.success) {
+          this.installInfo = installMsg.obj || {};
+          this.installRef = this.installInfo.latestRef || 'HEAD';
+        }
+      },
+      shortCommit(commit) {
+        return commit ? commit.substring(0, 12) : '';
+      },
+      async installBinary() {
+        this.installing = true;
+        const msg = await HttpUtil.post('/panel/api/openflux/install', { ref: this.installRef || 'HEAD' });
+        this.installing = false;
+        if (!msg.success) return;
+        this.$message.success('{{ i18n "pages.openflux.toasts.install" }}');
+        await this.fetchAll();
+      },
+      openForm(record) {
+        this.form = record ? { ...record } : defaultOpenFluxForm();
+        this.formVisible = true;
+      },
+      async saveForm() {
+        this.saving = true;
+        const url = this.form.id ? `/panel/api/openflux/update/${this.form.id}` : '/panel/api/openflux/add';
+        const msg = await HttpUtil.post(url, this.form);
+        this.saving = false;
+        if (!msg.success) return;
+        this.formVisible = false;
+        await this.fetchAll();
+      },
+      async loadStatus(record) {
+        this.selected = record;
+        const msg = await HttpUtil.get(`/panel/api/openflux/status/${record.id}`);
+        if (msg.success) this.status = msg.obj;
+      },
+      async runAction(action, record) {
+        if (action === 'unit') {
+          const msg = await HttpUtil.get(`/panel/api/openflux/unit/${record.id}`);
+          if (msg.success) {
+            this.unitText = msg.obj.unit;
+            this.unitVisible = true;
+          }
+          return;
+        }
+        if (action === 'delete') {
+          this.$confirm({
+            title: '{{ i18n "pages.openflux.deleteConfirm" }}',
+            class: themeSwitcher.currentTheme,
+            okText: '{{ i18n "delete" }}',
+            cancelText: '{{ i18n "cancel" }}',
+            onOk: async () => {
+              const msg = await HttpUtil.post(`/panel/api/openflux/delete/${record.id}`);
+              if (msg.success) await this.fetchAll();
+            }
+          });
+          return;
+        }
+        const endpoint = action === 'apply' ? `/panel/api/openflux/apply/${record.id}` : `/panel/api/openflux/${action}/${record.id}`;
+        const msg = await HttpUtil.post(endpoint);
+        if (msg.success) {
+          await this.fetchAll();
+          await this.loadStatus(record);
+        }
+      }
+    },
+    mounted() {
+      this.fetchAll();
+    }
+  });
+</script>
+{{ template "page/body_end" .}}

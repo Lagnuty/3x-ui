@@ -625,6 +625,21 @@ type CustomGeoResource struct {
 	UpdatedAt     int64  `json:"updatedAt" gorm:"autoUpdateTime;column:updated_at"`
 }
 
+type OpenFluxNode struct {
+	Id                int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Name              string `json:"name" form:"name" gorm:"not null"`
+	ServerID          string `json:"serverId" form:"serverId" gorm:"column:server_id;index"`
+	Transport         string `json:"transport" form:"transport" gorm:"not null;default:yandex"`
+	URL               string `json:"url" form:"url" gorm:"column:url;not null"`
+	Mode              string `json:"mode" form:"mode" gorm:"not null;default:l4"`
+	Codec             string `json:"codec" form:"codec" gorm:"not null;default:batched"`
+	Debug             int    `json:"debug" form:"debug" gorm:"not null;default:0"`
+	Enabled           bool   `json:"enabled" form:"enabled" gorm:"not null;default:true"`
+	EncryptionKeyFile string `json:"encryptionKeyFile" form:"encryptionKeyFile" gorm:"column:encryption_key_file"`
+	CreatedAt         int64  `json:"createdAt" gorm:"autoCreateTime;column:created_at"`
+	UpdatedAt         int64  `json:"updatedAt" gorm:"autoUpdateTime;column:updated_at"`
+}
+
 type ClientReverse struct {
 	Tag string `json:"tag"`
 }

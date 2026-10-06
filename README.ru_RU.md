@@ -22,11 +22,14 @@
 
 Как улучшенная версия оригинального проекта X-UI, 3X-UI обеспечивает повышенную стабильность, более широкую поддержку протоколов и дополнительные функции.
 
-Подробное описание текущей ветки **3x-ui 2.9.4+21** и совместимости с Xray
+Подробное описание текущей ветки **3x-ui 2.9.4+23wl1** и совместимости с Xray
 v26.9.30: [RELEASE_NOTES_2.9.4_RU.md](RELEASE_NOTES_2.9.4_RU.md).
 
 Технический справочник новых полей интерфейса и их JSON-параметров:
 [XRAY_26_UI_FIELDS_RU.md](XRAY_26_UI_FIELDS_RU.md).
+
+Интеграция OpenFlux Yandex Docs / Boards / vyandex:
+[OPENFLUX_3XUI_RU.md](OPENFLUX_3XUI_RU.md).
 
 ## Быстрый старт
 
@@ -36,13 +39,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 
 Полную документацию смотрите в [вики проекта](https://github.com/MHSanaei/3x-ui/wiki).
 
-## Готовый Docker-образ 2.9.4+21
+## Готовый Docker-образ 2.9.4+23wl1
 
 Образ уже собирается в GitHub Actions, поэтому на Ubuntu-сервере компилятор и
 исходный код не нужны:
 
 ```bash
-docker pull ghcr.io/lagnuty/3x-ui:2.9.4-21
+docker pull ghcr.io/lagnuty/3x-ui:2.9.4-23wl1
 ```
 
 Запуск с host networking, постоянной базой и сертификатами:
@@ -57,7 +60,7 @@ docker run -d \
   -e XUI_ENABLE_FAIL2BAN=true \
   -v "$PWD/db:/etc/x-ui" \
   -v "$PWD/cert:/root/cert" \
-  ghcr.io/lagnuty/3x-ui:2.9.4-21
+  ghcr.io/lagnuty/3x-ui:2.9.4-23wl1
 ```
 
 Для TUN дополнительно передайте устройство и capabilities:
@@ -78,7 +81,7 @@ docker compose up -d
 
 Теги образа:
 
-- `2.9.4-21` — точная неизменяемая версия панели `2.9.4+21`;
+- `2.9.4-23wl1` — точная неизменяемая версия панели `2.9.4+23wl1`;
 - `2.9.4` — актуальная сборка линии 2.9.4;
 - `latest` — последняя опубликованная сборка этой ветки.
 

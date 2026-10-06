@@ -3,10 +3,12 @@ package sub
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/config"
+	"github.com/mhsanaei/3x-ui/v2/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,6 +32,7 @@ type SUBController struct {
 	subService      *SubService
 	subJsonService  *SubJsonService
 	subClashService *SubClashService
+	openFluxService service.OpenFluxService
 }
 
 // NewSUBController creates a new subscription controller with the given configuration.
@@ -92,6 +95,8 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 		gClash := g.Group(a.subClashPath)
 		gClash.GET(":subid", a.subClashs)
 	}
+	g.GET("/api/mobile/subscriptions", a.mobileSubscriptions)
+	g.GET("/api/mobile/subscriptions/:subid", a.mobileSubscriptions)
 }
 
 // subs handles HTTP requests for subscription links, returning either HTML page or base64-encoded subscription data.
@@ -217,6 +222,18 @@ func (a *SUBController) subClashs(c *gin.Context) {
 		a.ApplyCommonHeaders(c, header, a.updateInterval, a.subTitle, a.subSupportUrl, profileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
 		c.Data(200, "application/yaml; charset=utf-8", []byte(clashSub))
 	}
+}
+
+func (a *SUBController) mobileSubscriptions(c *gin.Context) {
+	connections, err := a.openFluxService.MobileConnections()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"connections": connections,
+	})
 }
 
 // ApplyCommonHeaders sets common HTTP headers for subscription responses including user info, update interval, and profile title.
