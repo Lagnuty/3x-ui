@@ -47,7 +47,7 @@ jobs:
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=raw,value=2.9.4-22,enable=${{ github.event_name == 'push' && github.ref_name == '3xui' }}
+            type=raw,value=2.9.4-23wl1,enable=${{ github.event_name == 'push' && github.ref_name == '3xui' }}
             type=raw,value=2.9.4,enable=${{ github.event_name == 'push' && github.ref_name == '3xui' }}
             type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref_name == '3xui' }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
