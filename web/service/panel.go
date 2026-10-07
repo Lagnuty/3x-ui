@@ -21,6 +21,12 @@ import (
 // It handles panel restart, updates, and system-level panel controls.
 type PanelService struct{}
 
+const (
+	panelRepoOwner = "Lagnuty"
+	panelRepoName  = "3x-ui"
+	panelRepoURL   = "https://github.com/Lagnuty/3x-ui"
+)
+
 // PanelUpdateInfo contains the current and latest available panel versions.
 type PanelUpdateInfo struct {
 	CurrentVersion  string `json:"currentVersion"`
@@ -73,7 +79,7 @@ func (s *PanelService) StartUpdate() error {
 	}
 
 	mainFolder, serviceFolder := resolveUpdateFolders()
-	updateScript := fmt.Sprintf("set -o pipefail; %s -fLs https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh | %s", shellQuote(curl), shellQuote(bash))
+	updateScript := fmt.Sprintf("set -o pipefail; %s -fLs %s/raw/3xui/update.sh | %s", shellQuote(curl), shellQuote(panelRepoURL), shellQuote(bash))
 
 	if systemdRun, err := exec.LookPath("systemd-run"); err == nil {
 		unitName := fmt.Sprintf("x-ui-web-update-%d", time.Now().Unix())
@@ -115,7 +121,7 @@ func (s *PanelService) StartUpdate() error {
 
 func fetchLatestPanelVersion() (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/MHSanaei/3x-ui/releases/latest")
+	resp, err := client.Get(fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", panelRepoOwner, panelRepoName))
 	if err != nil {
 		return "", err
 	}
@@ -194,7 +200,8 @@ func parseVersionParts(version string) ([3]int, bool) {
 }
 
 func normalizeVersionTag(version string) string {
-	return strings.TrimPrefix(strings.TrimSpace(version), "v")
+	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
+	return strings.ReplaceAll(version, "+", "-")
 }
 
 func shellQuote(value string) string {

@@ -444,6 +444,30 @@ func copyOpenFluxFile(src, dst string, mode os.FileMode) error {
 	return out.Close()
 }
 
+func ensureOpenFluxBuildTools() error {
+	missing := make([]string, 0, 2)
+	if _, err := exec.LookPath("git"); err != nil {
+		missing = append(missing, "git")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		missing = append(missing, "golang-go")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	if _, err := exec.LookPath("apt-get"); err != nil {
+		return fmt.Errorf("%w: missing %s and apt-get is not available", ErrOpenFluxInstallFailed, strings.Join(missing, ", "))
+	}
+	if out, err := runOpenFluxCommand(10*time.Minute, "apt-get", "update"); err != nil {
+		return fmt.Errorf("%w: apt-get update failed: %s", ErrOpenFluxInstallFailed, strings.TrimSpace(out))
+	}
+	args := append([]string{"install", "-y"}, missing...)
+	if out, err := runOpenFluxCommand(10*time.Minute, "apt-get", args...); err != nil {
+		return fmt.Errorf("%w: apt-get install %s failed: %s", ErrOpenFluxInstallFailed, strings.Join(missing, " "), strings.TrimSpace(out))
+	}
+	return nil
+}
+
 func (s *OpenFluxService) InstallOrUpdate(ref string) (*OpenFluxInstallResult, error) {
 	if err := requireOpenFluxLinux(); err != nil {
 		return nil, err
@@ -452,11 +476,8 @@ func (s *OpenFluxService) InstallOrUpdate(ref string) (*OpenFluxInstallResult, e
 	if err != nil {
 		return nil, err
 	}
-	if _, err = exec.LookPath("git"); err != nil {
-		return nil, fmt.Errorf("%w: git is not installed", ErrOpenFluxInstallFailed)
-	}
-	if _, err = exec.LookPath("go"); err != nil {
-		return nil, fmt.Errorf("%w: go is not installed", ErrOpenFluxInstallFailed)
+	if err = ensureOpenFluxBuildTools(); err != nil {
+		return nil, err
 	}
 
 	tmp, err := os.MkdirTemp("", "openflux-build-*")

@@ -6,10 +6,15 @@
   <a-sidebar></a-sidebar>
   <a-layout id="content-layout">
     <a-layout-content>
-      <a-spin :spinning="loading" :delay="400" tip='{{ i18n "loading"}}' size="large">
-        <a-row :gutter="[16, 16]">
+      <a-spin :spinning="loadingStates.spinning" :delay="500" tip='{{ i18n "loading"}}' size="large">
+        <transition name="list" appear>
+          <template>
+        <a-row v-if="!loadingStates.fetched">
+          <div :style="{ minHeight: 'calc(100vh - 120px)' }"></div>
+        </a-row>
+        <a-row :gutter="[isMobile ? 8 : 16, isMobile ? 8 : 12]" v-else>
           <a-col :xs="24" :lg="15">
-            <a-card>
+            <a-card hoverable>
               <div class="openflux-toolbar">
                 <a-space>
                   <a-button type="primary" icon="plus" @click="openForm()">{{ i18n "pages.openflux.add" }}</a-button>
@@ -19,6 +24,7 @@
                 <a-tag v-else color="orange">{{ i18n "pages.openflux.binaryMissing" }}</a-tag>
               </div>
               <a-table :columns="columns" :data-source="nodes" :row-key="row => row.id" size="middle"
+                :scroll="isMobile ? { x: 760 } : {}"
                 :pagination="{ pageSize: 8 }">
                 <template slot="enabled" slot-scope="enabled">
                   <a-tag :color="enabled ? 'green' : 'default'">[[ enabled ? '{{ i18n "enabled" }}' : '{{ i18n "disabled" }}' ]]</a-tag>
@@ -58,7 +64,7 @@
             </a-card>
           </a-col>
           <a-col :xs="24" :lg="9">
-            <a-card class="openflux-binary" title='{{ i18n "pages.openflux.binaryManager" }}'>
+            <a-card class="openflux-binary" title='{{ i18n "pages.openflux.binaryManager" }}' hoverable>
               <a-descriptions :column="1" size="small" bordered>
                 <a-descriptions-item label='{{ i18n "pages.openflux.version" }}'>
                   [[ installInfo.installedVersion || '{{ i18n "pages.openflux.binaryMissing" }}' ]]
@@ -74,7 +80,8 @@
                 enter-button='{{ i18n "pages.openflux.install" }}' :loading="installing"
                 placeholder="HEAD, main, tag или commit" @search="installBinary"></a-input-search>
             </a-card>
-            <a-card class="openflux-status-card" :title="selected ? selected.name : '{{ i18n "pages.openflux.status" }}'">
+            <a-card class="openflux-status-card" :title="selected ? selected.name : '{{ i18n "pages.openflux.status" }}'"
+              hoverable>
               <template v-if="status">
                 <a-descriptions :column="1" size="small" bordered>
                   <a-descriptions-item label="Unit">[[ status.unitName ]]</a-descriptions-item>
@@ -90,6 +97,8 @@
             </a-card>
           </a-col>
         </a-row>
+          </template>
+        </transition>
       </a-spin>
     </a-layout-content>
   </a-layout>
@@ -188,7 +197,28 @@
     font-family: Consolas, Menlo, monospace;
   }
 
+  .openflux-page .ant-table {
+    outline: 1px solid #f0f0f0;
+    outline-offset: -1px;
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .openflux-page.dark .ant-table {
+    outline-color: var(--dark-color-table-ring);
+  }
+
+  @media (min-width: 769px) {
+    .openflux-page .ant-layout-content {
+      margin: 24px 16px;
+    }
+  }
+
   @media (max-width: 768px) {
+    .openflux-page .ant-card-body {
+      padding: .5rem;
+    }
+
     .openflux-toolbar {
       align-items: flex-start;
       flex-direction: column;
@@ -212,9 +242,13 @@
   const app = new Vue({
     delimiters: ['[[', ']]'],
     el: '#app',
+    mixins: [MediaQueryMixin],
     data: {
       themeSwitcher,
-      loading: false,
+      loadingStates: {
+        fetched: false,
+        spinning: false
+      },
       saving: false,
       installing: false,
       nodes: [],
@@ -246,12 +280,13 @@
         }
       },
       async fetchAll() {
-        this.loading = true;
+        this.loadingStates.spinning = true;
         const [listMsg, installMsg] = await Promise.all([
           HttpUtil.get('/panel/api/openflux/list'),
           HttpUtil.get('/panel/api/openflux/install-info')
         ]);
-        this.loading = false;
+        this.loadingStates.spinning = false;
+        this.loadingStates.fetched = true;
         if (listMsg.success) this.nodes = listMsg.obj || [];
         if (installMsg.success) {
           this.installInfo = installMsg.obj || {};

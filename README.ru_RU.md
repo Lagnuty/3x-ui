@@ -7,10 +7,10 @@
   </picture>
 </p>
 
-[![Release](https://img.shields.io/github/v/release/mhsanaei/3x-ui.svg)](https://github.com/MHSanaei/3x-ui/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/mhsanaei/3x-ui/release.yml.svg)](https://github.com/MHSanaei/3x-ui/actions)
+[![Release](https://img.shields.io/github/v/release/Lagnuty/3x-ui.svg)](https://github.com/Lagnuty/3x-ui/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/Lagnuty/3x-ui/release.yml.svg)](https://github.com/Lagnuty/3x-ui/actions)
 [![GO Version](https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg)](#)
-[![Downloads](https://img.shields.io/github/downloads/mhsanaei/3x-ui/total.svg)](https://github.com/MHSanaei/3x-ui/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Lagnuty/3x-ui/total.svg)](https://github.com/Lagnuty/3x-ui/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 [![Go Reference](https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v2.svg)](https://pkg.go.dev/github.com/mhsanaei/3x-ui/v2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v2)](https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v2)
@@ -34,10 +34,10 @@ v26.9.30: [RELEASE_NOTES_2.9.4_RU.md](RELEASE_NOTES_2.9.4_RU.md).
 ## Быстрый старт
 
 ```
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/Lagnuty/3x-ui/3xui/install.sh)
 ```
 
-Полную документацию смотрите в [вики проекта](https://github.com/MHSanaei/3x-ui/wiki).
+Полную документацию смотрите в [вики проекта](https://github.com/Lagnuty/3x-ui/wiki).
 
 ## Готовый Docker-образ 2.9.4+23wl1
 
@@ -109,4 +109,4 @@ docker compose up -d
 
 ## Звезды с течением времени
 
-[![Stargazers over time](https://starchart.cc/MHSanaei/3x-ui.svg?variant=adaptive)](https://starchart.cc/MHSanaei/3x-ui)
+[![Stargazers over time](https://starchart.cc/Lagnuty/3x-ui.svg?variant=adaptive)](https://starchart.cc/Lagnuty/3x-ui)
