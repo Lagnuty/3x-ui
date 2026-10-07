@@ -34,6 +34,10 @@ type PanelUpdateInfo struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 }
 
+type githubTag struct {
+	Name string `json:"name"`
+}
+
 func (s *PanelService) RestartPanel(delay time.Duration) error {
 	p, err := os.FindProcess(syscall.Getpid())
 	if err != nil {
@@ -126,6 +130,9 @@ func fetchLatestPanelVersion() (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fetchLatestPanelTag(client)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, resp.Status)
 	}
@@ -138,6 +145,31 @@ func fetchLatestPanelVersion() (string, error) {
 		return "", fmt.Errorf("latest panel release tag is empty")
 	}
 	return release.TagName, nil
+}
+
+func fetchLatestPanelTag(client *http.Client) (string, error) {
+	resp, err := client.Get(fmt.Sprintf("https://api.github.com/repos/%s/%s/tags?per_page=50", panelRepoOwner, panelRepoName))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return config.GetVersion(), nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	var tags []githubTag
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		return "", err
+	}
+	for _, tag := range tags {
+		if strings.TrimSpace(tag.Name) != "" {
+			return tag.Name, nil
+		}
+	}
+	return config.GetVersion(), nil
 }
 
 func resolveUpdateFolders() (string, string) {

@@ -33,6 +33,8 @@ RUN apk add --no-cache --update \
   fail2ban \
   bash \
   curl \
+  git \
+  go \
   openssl
 
 COPY --from=builder /app/build/ /app/

@@ -16,8 +16,7 @@
 Серверный установщик делает:
 
 1. Проверяет, что панель запущена на Linux.
-2. Проверяет наличие `git` и `go`; если их нет на Ubuntu/Debian-сервере,
-   пытается установить `git golang-go` через `apt-get`.
+2. Проверяет наличие `git` и `go`; если их нет, пытается установить пакеты через `apt-get` на Ubuntu/Debian или через `apk` на Alpine/Docker.
 3. Клонирует `https://github.com/p1neappleXpress/OpenFlux.git`.
 4. По желанию переключается на указанный `ref`: `HEAD`, branch, tag или commit.
 5. Собирает статический linux-amd64 бинарь командой `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath`.
@@ -27,12 +26,14 @@
 9. Переприменяет включённые `openflux-<id>.service`.
 10. При ошибке активации возвращает предыдущий бинарь.
 
-На Ubuntu-сервере установщик ставит недостающие пакеты сам, если панель
+На Ubuntu/Debian и Alpine установщик ставит недостающие пакеты сам, если панель
 запущена с правами root. Вручную это выглядит так:
 
 ```bash
 sudo apt update
 sudo apt install -y git golang-go
+# Alpine/Docker:
+apk add --no-cache git go
 ```
 
 ## systemd

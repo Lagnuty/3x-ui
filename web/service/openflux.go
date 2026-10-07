@@ -450,22 +450,46 @@ func ensureOpenFluxBuildTools() error {
 		missing = append(missing, "git")
 	}
 	if _, err := exec.LookPath("go"); err != nil {
-		missing = append(missing, "golang-go")
+		missing = append(missing, "go")
 	}
 	if len(missing) == 0 {
 		return nil
 	}
-	if _, err := exec.LookPath("apt-get"); err != nil {
-		return fmt.Errorf("%w: missing %s and apt-get is not available", ErrOpenFluxInstallFailed, strings.Join(missing, ", "))
+
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		aptPackages := openFluxBuildPackages(missing, map[string]string{"go": "golang-go"})
+		if out, err := runOpenFluxCommand(10*time.Minute, "apt-get", "update"); err != nil {
+			return fmt.Errorf("%w: apt-get update failed: %s", ErrOpenFluxInstallFailed, strings.TrimSpace(out))
+		}
+		args := append([]string{"install", "-y"}, aptPackages...)
+		if out, err := runOpenFluxCommand(10*time.Minute, "apt-get", args...); err != nil {
+			return fmt.Errorf("%w: apt-get install %s failed: %s", ErrOpenFluxInstallFailed, strings.Join(aptPackages, " "), strings.TrimSpace(out))
+		}
+		return nil
 	}
-	if out, err := runOpenFluxCommand(10*time.Minute, "apt-get", "update"); err != nil {
-		return fmt.Errorf("%w: apt-get update failed: %s", ErrOpenFluxInstallFailed, strings.TrimSpace(out))
+
+	if _, err := exec.LookPath("apk"); err == nil {
+		apkPackages := openFluxBuildPackages(missing, nil)
+		args := append([]string{"add", "--no-cache"}, apkPackages...)
+		if out, err := runOpenFluxCommand(10*time.Minute, "apk", args...); err != nil {
+			return fmt.Errorf("%w: apk add %s failed: %s", ErrOpenFluxInstallFailed, strings.Join(apkPackages, " "), strings.TrimSpace(out))
+		}
+		return nil
 	}
-	args := append([]string{"install", "-y"}, missing...)
-	if out, err := runOpenFluxCommand(10*time.Minute, "apt-get", args...); err != nil {
-		return fmt.Errorf("%w: apt-get install %s failed: %s", ErrOpenFluxInstallFailed, strings.Join(missing, " "), strings.TrimSpace(out))
+
+	return fmt.Errorf("%w: missing %s and neither apt-get nor apk is available", ErrOpenFluxInstallFailed, strings.Join(missing, ", "))
+}
+
+func openFluxBuildPackages(missing []string, aliases map[string]string) []string {
+	packages := make([]string, 0, len(missing))
+	for _, pkg := range missing {
+		if alias, ok := aliases[pkg]; ok {
+			packages = append(packages, alias)
+			continue
+		}
+		packages = append(packages, pkg)
 	}
-	return nil
+	return packages
 }
 
 func (s *OpenFluxService) InstallOrUpdate(ref string) (*OpenFluxInstallResult, error) {
