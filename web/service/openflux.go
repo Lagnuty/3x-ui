@@ -23,11 +23,12 @@ import (
 )
 
 const (
-	openFluxBinaryPath = "/usr/local/bin/openflux"
-	openFluxRepoURL    = "https://github.com/p1neappleXpress/OpenFlux.git"
-	openFluxUnitDir    = "/etc/systemd/system"
-	openFluxUnitPrefix = "openflux-"
-	openFluxUnitSuffix = ".service"
+	openFluxBinaryPath  = "/usr/local/bin/openflux"
+	openFluxVersionPath = "/usr/local/bin/openflux.version"
+	openFluxRepoURL     = "https://github.com/p1neappleXpress/OpenFlux.git"
+	openFluxUnitDir     = "/etc/systemd/system"
+	openFluxUnitPrefix  = "openflux-"
+	openFluxUnitSuffix  = ".service"
 )
 
 var (
@@ -387,14 +388,13 @@ func (s *OpenFluxService) BinaryVersion() (string, error) {
 	if _, err := os.Stat(openFluxBinaryPath); err != nil {
 		return "", ErrOpenFluxBinaryUnavailable
 	}
-	out, err := runOpenFluxCommand(10*time.Second, openFluxBinaryPath, "--version")
-	if err != nil {
-		out, err = runOpenFluxCommand(10*time.Second, openFluxBinaryPath, "version")
+	if data, err := os.ReadFile(openFluxVersionPath); err == nil {
+		version := strings.TrimSpace(string(data))
+		if version != "" {
+			return version, nil
+		}
 	}
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(maskOpenFluxSecrets(out)), nil
+	return "installed (version unknown)", nil
 }
 
 func (s *OpenFluxService) InstallInfo() (*OpenFluxInstallInfo, error) {
@@ -533,30 +533,42 @@ func (s *OpenFluxService) InstallOrUpdate(ref string) (*OpenFluxInstallResult, e
 	if err = os.Chmod(candidate, 0o755); err != nil {
 		return nil, err
 	}
-	versionOut, versionErr := runOpenFluxCommand(10*time.Second, candidate, "--version")
-	if versionErr != nil {
-		versionOut, versionErr = runOpenFluxCommand(10*time.Second, candidate, "version")
+	if stat, err := os.Stat(candidate); err != nil {
+		return nil, err
+	} else if stat.Size() == 0 {
+		return nil, fmt.Errorf("%w: built OpenFlux binary is empty", ErrOpenFluxInstallFailed)
 	}
-	if versionErr != nil {
-		return nil, fmt.Errorf("%w: candidate version check failed: %s", ErrOpenFluxInstallFailed, strings.TrimSpace(versionOut))
-	}
+	version := openFluxInstalledVersion(ref, commit)
 
 	if err = os.MkdirAll(filepath.Dir(openFluxBinaryPath), 0o755); err != nil {
 		return nil, err
 	}
 	var backupPath string
+	var backupVersionPath string
 	if _, statErr := os.Stat(openFluxBinaryPath); statErr == nil {
 		backupPath = fmt.Sprintf("%s.rollback-%d", openFluxBinaryPath, time.Now().UnixNano())
 		if err = os.Rename(openFluxBinaryPath, backupPath); err != nil {
 			return nil, fmt.Errorf("%w: backup failed: %v", ErrOpenFluxInstallFailed, err)
 		}
 	}
+	if _, statErr := os.Stat(openFluxVersionPath); statErr == nil {
+		backupVersionPath = fmt.Sprintf("%s.rollback-%d", openFluxVersionPath, time.Now().UnixNano())
+		if err = os.Rename(openFluxVersionPath, backupVersionPath); err != nil {
+			return nil, fmt.Errorf("%w: version backup failed: %v", ErrOpenFluxInstallFailed, err)
+		}
+	}
 
 	rollback := func(updateErr error) (*OpenFluxInstallResult, error) {
 		_ = os.Remove(openFluxBinaryPath)
+		_ = os.Remove(openFluxVersionPath)
 		if backupPath != "" {
 			if restoreErr := os.Rename(backupPath, openFluxBinaryPath); restoreErr != nil {
 				return nil, fmt.Errorf("%v; rollback failed: %w", updateErr, restoreErr)
+			}
+		}
+		if backupVersionPath != "" {
+			if restoreErr := os.Rename(backupVersionPath, openFluxVersionPath); restoreErr != nil {
+				return nil, fmt.Errorf("%v; version rollback failed: %w", updateErr, restoreErr)
 			}
 		}
 		nodes, _ := s.GetAll()
@@ -571,8 +583,8 @@ func (s *OpenFluxService) InstallOrUpdate(ref string) (*OpenFluxInstallResult, e
 	if err = copyOpenFluxFile(candidate, openFluxBinaryPath, 0o755); err != nil {
 		return rollback(fmt.Errorf("%w: activate failed: %v", ErrOpenFluxInstallFailed, err))
 	}
-	if _, err = s.BinaryVersion(); err != nil {
-		return rollback(fmt.Errorf("%w: installed binary failed version check: %v", ErrOpenFluxInstallFailed, err))
+	if err = os.WriteFile(openFluxVersionPath, []byte(version+"\n"), 0o644); err != nil {
+		return rollback(fmt.Errorf("%w: version metadata write failed: %v", ErrOpenFluxInstallFailed, err))
 	}
 
 	restarted := 0
@@ -592,15 +604,35 @@ func (s *OpenFluxService) InstallOrUpdate(ref string) (*OpenFluxInstallResult, e
 		}
 		backupPath = ""
 	}
+	if backupVersionPath != "" {
+		if err = os.Remove(backupVersionPath); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: installed but version backup cleanup failed: %v", ErrOpenFluxInstallFailed, err)
+		}
+	}
 	return &OpenFluxInstallResult{
 		Path:          openFluxBinaryPath,
 		Repo:          openFluxRepoURL,
 		Ref:           ref,
 		Commit:        commit,
-		Version:       strings.TrimSpace(maskOpenFluxSecrets(versionOut)),
+		Version:       version,
 		BackupPath:    backupPath,
 		RestartedUnit: restarted,
 	}, nil
+}
+
+func openFluxInstalledVersion(ref string, commit string) string {
+	ref = strings.TrimSpace(ref)
+	commit = strings.TrimSpace(commit)
+	if commit == "" {
+		if ref == "" {
+			return "installed"
+		}
+		return ref
+	}
+	if ref == "" || ref == "HEAD" {
+		return "HEAD@" + commit
+	}
+	return ref + "@" + commit
 }
 
 func maskOpenFluxSecrets(text string) string {

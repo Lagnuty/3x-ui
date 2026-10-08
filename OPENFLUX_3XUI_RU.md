@@ -20,11 +20,11 @@
 3. Клонирует `https://github.com/p1neappleXpress/OpenFlux.git`.
 4. По желанию переключается на указанный `ref`: `HEAD`, branch, tag или commit.
 5. Собирает статический linux-amd64 бинарь командой `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath`.
-6. Проверяет, что кандидат отвечает на `--version` или `version`.
-7. Делает rollback-backup текущего `/usr/local/bin/openflux`.
-8. Ставит новый бинарь в `/usr/local/bin/openflux`.
+6. Проверяет, что сборка создала непустой бинарь, без запуска OpenFlux.
+7. Делает rollback-backup текущего `/usr/local/bin/openflux` и `/usr/local/bin/openflux.version`.
+8. Ставит новый бинарь в `/usr/local/bin/openflux` и пишет `ref@commit` в `/usr/local/bin/openflux.version`.
 9. Переприменяет включённые `openflux-<id>.service`.
-10. При ошибке активации возвращает предыдущий бинарь.
+10. При ошибке активации возвращает предыдущий бинарь и метаданные версии.
 
 На Ubuntu/Debian и Alpine установщик ставит недостающие пакеты сам, если панель
 запущена с правами root. Вручную это выглядит так:
