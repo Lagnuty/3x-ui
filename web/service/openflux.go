@@ -27,6 +27,8 @@ const (
 	openFluxVersionPath = "/usr/local/bin/openflux.version"
 	openFluxRepoURL     = "https://github.com/p1neappleXpress/OpenFlux.git"
 	openFluxUnitDir     = "/etc/systemd/system"
+	openFluxRunDir      = "/var/run/openflux"
+	openFluxLogDir      = "/var/log/openflux"
 	openFluxUnitPrefix  = "openflux-"
 	openFluxUnitSuffix  = ".service"
 )
@@ -229,11 +231,19 @@ func openFluxUnitPath(id int) string {
 	return filepath.Join(openFluxUnitDir, openFluxUnitName(id))
 }
 
+func openFluxPIDPath(id int) string {
+	return filepath.Join(openFluxRunDir, fmt.Sprintf("openflux-%d.pid", id))
+}
+
+func openFluxLogPath(id int) string {
+	return filepath.Join(openFluxLogDir, fmt.Sprintf("openflux-%d.log", id))
+}
+
 func openFluxShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
-func openFluxUnitContent(node *model.OpenFluxNode) string {
+func openFluxArgs(node *model.OpenFluxNode) []string {
 	args := []string{
 		"--role=exit",
 		"--mode=" + node.Mode,
@@ -245,6 +255,11 @@ func openFluxUnitContent(node *model.OpenFluxNode) string {
 	if node.EncryptionKeyFile != "" {
 		args = append(args, "--encryption-key-file="+node.EncryptionKeyFile)
 	}
+	return args
+}
+
+func openFluxUnitContent(node *model.OpenFluxNode) string {
+	args := openFluxArgs(node)
 	quoted := make([]string, 0, len(args)+1)
 	quoted = append(quoted, openFluxBinaryPath)
 	for _, arg := range args {
@@ -299,8 +314,100 @@ func runOpenFluxCommandIn(timeout time.Duration, dir string, env []string, name 
 	return string(out), err
 }
 
+func openFluxSystemdAvailable() bool {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return false
+	}
+	out, err := runOpenFluxCommand(5*time.Second, "systemctl", "is-system-running")
+	if err == nil {
+		return true
+	}
+	out = strings.TrimSpace(out)
+	if strings.Contains(out, "System has not been booted") || strings.Contains(out, "Failed to connect to bus") {
+		return false
+	}
+	return out != ""
+}
+
 func reloadSystemd() {
 	_, _ = runOpenFluxCommand(20*time.Second, "systemctl", "daemon-reload")
+}
+
+func ensureOpenFluxRuntimeDirs() error {
+	if err := os.MkdirAll(openFluxRunDir, 0o755); err != nil {
+		return err
+	}
+	return os.MkdirAll(openFluxLogDir, 0o755)
+}
+
+func openFluxProcessRunning(id int) bool {
+	data, err := os.ReadFile(openFluxPIDPath(id))
+	if err != nil {
+		return false
+	}
+	pid := strings.TrimSpace(string(data))
+	if pid == "" {
+		return false
+	}
+	_, err = runOpenFluxCommand(5*time.Second, "kill", "-0", pid)
+	return err == nil
+}
+
+func startOpenFluxProcess(node *model.OpenFluxNode) error {
+	if openFluxProcessRunning(node.Id) {
+		return nil
+	}
+	if err := ensureOpenFluxRuntimeDirs(); err != nil {
+		return err
+	}
+	logFile, err := os.OpenFile(openFluxLogPath(node.Id), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+	cmd := exec.Command(openFluxBinaryPath, openFluxArgs(node)...)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	if err := os.WriteFile(openFluxPIDPath(node.Id), []byte(strconv.Itoa(cmd.Process.Pid)+"\n"), 0o644); err != nil {
+		_ = cmd.Process.Kill()
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+func stopOpenFluxProcess(id int) error {
+	data, err := os.ReadFile(openFluxPIDPath(id))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		_ = os.Remove(openFluxPIDPath(id))
+		return nil
+	}
+	if proc, err := os.FindProcess(pid); err == nil {
+		_ = proc.Kill()
+	}
+	_ = os.Remove(openFluxPIDPath(id))
+	return nil
+}
+
+func tailOpenFluxLog(id int, logLines int) string {
+	data, err := os.ReadFile(openFluxLogPath(id))
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if logLines > 0 && len(lines) > logLines {
+		lines = lines[len(lines)-logLines:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (s *OpenFluxService) ApplyUnit(id int) error {
@@ -311,24 +418,40 @@ func (s *OpenFluxService) ApplyUnit(id int) error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(openFluxUnitDir, 0o755); err != nil {
+		return err
+	}
 	if err := os.WriteFile(openFluxUnitPath(id), []byte(openFluxUnitContent(node)), 0o644); err != nil {
 		return err
 	}
-	reloadSystemd()
-	if node.Enabled {
-		if out, err := runOpenFluxCommand(30*time.Second, "systemctl", "enable", "--now", openFluxUnitName(id)); err != nil {
+	if openFluxSystemdAvailable() {
+		reloadSystemd()
+		if node.Enabled {
+			if out, err := runOpenFluxCommand(30*time.Second, "systemctl", "enable", "--now", openFluxUnitName(id)); err != nil {
+				return fmt.Errorf("%w: %s", ErrOpenFluxSystemctlFailed, strings.TrimSpace(out))
+			}
+			return nil
+		}
+		if out, err := runOpenFluxCommand(30*time.Second, "systemctl", "disable", "--now", openFluxUnitName(id)); err != nil {
 			return fmt.Errorf("%w: %s", ErrOpenFluxSystemctlFailed, strings.TrimSpace(out))
 		}
 		return nil
 	}
-	if out, err := runOpenFluxCommand(30*time.Second, "systemctl", "disable", "--now", openFluxUnitName(id)); err != nil {
-		return fmt.Errorf("%w: %s", ErrOpenFluxSystemctlFailed, strings.TrimSpace(out))
+	if node.Enabled {
+		return startOpenFluxProcess(node)
 	}
-	return nil
+	return stopOpenFluxProcess(id)
 }
 
 func removeOpenFluxUnit(id int) error {
 	if err := requireOpenFluxLinux(); err != nil {
+		return err
+	}
+	if openFluxSystemdAvailable() {
+		if out, err := runOpenFluxCommand(30*time.Second, "systemctl", "disable", "--now", openFluxUnitName(id)); err != nil {
+			return fmt.Errorf("%w: %s", ErrOpenFluxSystemctlFailed, strings.TrimSpace(out))
+		}
+	} else if err := stopOpenFluxProcess(id); err != nil {
 		return err
 	}
 	path := openFluxUnitPath(id)
@@ -337,7 +460,9 @@ func removeOpenFluxUnit(id int) error {
 			return err
 		}
 	}
-	reloadSystemd()
+	if openFluxSystemdAvailable() {
+		reloadSystemd()
+	}
 	return nil
 }
 
@@ -345,13 +470,25 @@ func (s *OpenFluxService) Control(id int, action string) error {
 	if err := requireOpenFluxLinux(); err != nil {
 		return err
 	}
-	if _, err := s.GetByID(id); err != nil {
+	node, err := s.GetByID(id)
+	if err != nil {
 		return err
 	}
 	switch action {
 	case "start", "stop", "restart":
 	default:
 		return fmt.Errorf("unsupported action %q", action)
+	}
+	if !openFluxSystemdAvailable() {
+		if action == "stop" || action == "restart" {
+			if err := stopOpenFluxProcess(id); err != nil {
+				return err
+			}
+		}
+		if action == "start" || action == "restart" {
+			return startOpenFluxProcess(node)
+		}
+		return nil
 	}
 	if out, err := runOpenFluxCommand(30*time.Second, "systemctl", action, openFluxUnitName(id)); err != nil {
 		return fmt.Errorf("%w: %s", ErrOpenFluxSystemctlFailed, strings.TrimSpace(out))
@@ -369,6 +506,19 @@ func (s *OpenFluxService) Status(id int, logLines int) (*OpenFluxStatus, error) 
 	if err := requireOpenFluxLinux(); err != nil {
 		status.State = "unsupported"
 		status.Error = err.Error()
+		return status, nil
+	}
+	if !openFluxSystemdAvailable() {
+		status.Active = openFluxProcessRunning(id)
+		if status.Active {
+			status.State = "active"
+		} else {
+			status.State = "inactive"
+		}
+		if logLines <= 0 || logLines > 500 {
+			logLines = 80
+		}
+		status.Logs = maskOpenFluxSecrets(tailOpenFluxLog(id, logLines))
 		return status, nil
 	}
 	out, err := runOpenFluxCommand(10*time.Second, "systemctl", "is-active", status.UnitName)

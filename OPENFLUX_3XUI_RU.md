@@ -23,7 +23,7 @@
 6. Проверяет, что сборка создала непустой бинарь, без запуска OpenFlux.
 7. Делает rollback-backup текущего `/usr/local/bin/openflux` и `/usr/local/bin/openflux.version`.
 8. Ставит новый бинарь в `/usr/local/bin/openflux` и пишет `ref@commit` в `/usr/local/bin/openflux.version`.
-9. Переприменяет включённые `openflux-<id>.service`.
+9. Переприменяет включённые `openflux-<id>.service`; если systemd недоступен в Docker/Alpine, запускает OpenFlux как отдельный процесс с pid/log файлами.
 10. При ошибке активации возвращает предыдущий бинарь и метаданные версии.
 
 На Ubuntu/Debian и Alpine установщик ставит недостающие пакеты сам, если панель
@@ -51,6 +51,11 @@ apk add --no-cache git go
 ```
 
 Если указан файл ключа, добавляется `--encryption-key-file=<path>`.
+
+Если панель запущена в контейнере без systemd, тот же профиль запускается напрямую:
+
+- pid: `/var/run/openflux/openflux-<id>.pid`
+- лог: `/var/log/openflux/openflux-<id>.log`
 
 ## Panel API
 
