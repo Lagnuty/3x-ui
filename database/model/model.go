@@ -635,6 +635,7 @@ type OpenFluxNode struct {
 	Codec             string `json:"codec" form:"codec" gorm:"not null;default:batched"`
 	Debug             int    `json:"debug" form:"debug" gorm:"not null;default:0"`
 	Enabled           bool   `json:"enabled" form:"enabled" gorm:"not null;default:true"`
+	EncryptionKey     string `json:"encryptionKey" form:"encryptionKey" gorm:"column:encryption_key"`
 	EncryptionKeyFile string `json:"encryptionKeyFile" form:"encryptionKeyFile" gorm:"column:encryption_key_file"`
 	CreatedAt         int64  `json:"createdAt" gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt         int64  `json:"updatedAt" gorm:"autoUpdateTime;column:updated_at"`

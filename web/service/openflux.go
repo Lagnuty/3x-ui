@@ -27,6 +27,7 @@ const (
 	openFluxVersionPath = "/usr/local/bin/openflux.version"
 	openFluxRepoURL     = "https://github.com/p1neappleXpress/OpenFlux.git"
 	openFluxUnitDir     = "/etc/systemd/system"
+	openFluxKeyDir      = "/etc/openflux/keys"
 	openFluxRunDir      = "/var/run/openflux"
 	openFluxLogDir      = "/var/log/openflux"
 	openFluxUnitPrefix  = "openflux-"
@@ -79,6 +80,7 @@ type OpenFluxMobileConnection struct {
 	ClientCommand string   `json:"client_command"`
 	ClientArgs    []string `json:"client_args"`
 	Socks5        string   `json:"socks5"`
+	EncryptionKey string   `json:"encryption_key,omitempty"`
 	ModuleConfig  string   `json:"module_config"`
 	Enabled       bool     `json:"enabled"`
 }
@@ -146,6 +148,7 @@ func (s *OpenFluxService) Update(id int, node *model.OpenFluxNode) error {
 		"codec":               node.Codec,
 		"debug":               node.Debug,
 		"enabled":             node.Enabled,
+		"encryption_key":      node.EncryptionKey,
 		"encryption_key_file": node.EncryptionKeyFile,
 	}
 	if err := database.GetDB().Model(&model.OpenFluxNode{}).Where("id = ?", id).Updates(updates).Error; err != nil {
@@ -170,6 +173,7 @@ func normalizeOpenFluxNode(node *model.OpenFluxNode) error {
 	node.URL = strings.TrimSpace(node.URL)
 	node.Mode = strings.ToLower(strings.TrimSpace(node.Mode))
 	node.Codec = strings.ToLower(strings.TrimSpace(node.Codec))
+	node.EncryptionKey = strings.TrimSpace(node.EncryptionKey)
 	node.EncryptionKeyFile = strings.TrimSpace(node.EncryptionKeyFile)
 	if node.Name == "" {
 		return ErrOpenFluxNameRequired
@@ -220,6 +224,9 @@ func normalizeOpenFluxNode(node *model.OpenFluxNode) error {
 	if node.EncryptionKeyFile != "" && (!filepath.IsAbs(node.EncryptionKeyFile) || strings.ContainsAny(node.EncryptionKeyFile, "\x00\r\n")) {
 		return ErrOpenFluxKeyFileInvalid
 	}
+	if node.EncryptionKey != "" && strings.ContainsAny(node.EncryptionKey, "\x00\r\n") {
+		return ErrOpenFluxKeyFileInvalid
+	}
 	if !openFluxSafeArgChars.MatchString(node.URL) || !openFluxSafeArgChars.MatchString(node.Name) {
 		return ErrOpenFluxURLInvalid
 	}
@@ -242,6 +249,27 @@ func openFluxLogPath(id int) string {
 	return filepath.Join(openFluxLogDir, fmt.Sprintf("openflux-%d.log", id))
 }
 
+func openFluxInlineKeyPath(id int) string {
+	return filepath.Join(openFluxKeyDir, fmt.Sprintf("openflux-%d.key", id))
+}
+
+func openFluxEncryptionKeyFile(node *model.OpenFluxNode) string {
+	if node.EncryptionKey != "" {
+		return openFluxInlineKeyPath(node.Id)
+	}
+	return node.EncryptionKeyFile
+}
+
+func writeOpenFluxInlineKey(node *model.OpenFluxNode) error {
+	if node.EncryptionKey == "" {
+		return nil
+	}
+	if err := os.MkdirAll(openFluxKeyDir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(openFluxInlineKeyPath(node.Id), []byte(node.EncryptionKey+"\n"), 0o600)
+}
+
 func openFluxShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
@@ -255,8 +283,8 @@ func openFluxArgs(node *model.OpenFluxNode) []string {
 		"--codec=" + node.Codec,
 		"--debug=" + strconv.Itoa(node.Debug),
 	}
-	if node.EncryptionKeyFile != "" {
-		args = append(args, "--encryption-key-file="+node.EncryptionKeyFile)
+	if keyFile := openFluxEncryptionKeyFile(node); keyFile != "" {
+		args = append(args, "--encryption-key-file="+keyFile)
 	}
 	return args
 }
@@ -384,6 +412,9 @@ func startOpenFluxProcess(node *model.OpenFluxNode) error {
 	if openFluxProcessRunning(node.Id) {
 		return nil
 	}
+	if err := writeOpenFluxInlineKey(node); err != nil {
+		return err
+	}
 	if err := ensureOpenFluxRuntimeDirs(); err != nil {
 		return err
 	}
@@ -459,6 +490,9 @@ func (s *OpenFluxService) ApplyUnit(id int) error {
 		if err := s.ensureOpenFluxBinaryInstalled(); err != nil {
 			return err
 		}
+		if err := writeOpenFluxInlineKey(node); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(openFluxUnitDir, 0o755); err != nil {
 		return err
@@ -501,6 +535,9 @@ func removeOpenFluxUnit(id int) error {
 		if err := os.Remove(path); err != nil {
 			return err
 		}
+	}
+	if err := os.Remove(openFluxInlineKeyPath(id)); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	if openFluxSystemdAvailable() {
 		reloadSystemd()
@@ -871,8 +908,14 @@ func (s *OpenFluxService) MobileConnections() ([]OpenFluxMobileConnection, error
 			"client_command": clientCommand,
 			"socks5":         "127.0.0.1:1080",
 		}
-		if node.EncryptionKeyFile != "" {
+		if node.EncryptionKey != "" {
+			cfg["encryption_key"] = node.EncryptionKey
+			cfg["encryption"] = "inline"
+			cfg["requires_key_file_materialization"] = true
+		}
+		if node.EncryptionKeyFile != "" && node.EncryptionKey == "" {
 			cfg["encryption_key_file"] = node.EncryptionKeyFile
+			cfg["encryption"] = "file"
 		}
 		rawCfg, _ := json.Marshal(cfg)
 		out = append(out, OpenFluxMobileConnection{
@@ -885,6 +928,7 @@ func (s *OpenFluxService) MobileConnections() ([]OpenFluxMobileConnection, error
 			ClientCommand: clientCommand,
 			ClientArgs:    clientArgs,
 			Socks5:        "127.0.0.1:1080",
+			EncryptionKey: node.EncryptionKey,
 			ModuleConfig:  string(rawCfg),
 			Enabled:       node.Enabled,
 		})

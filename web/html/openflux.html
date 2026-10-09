@@ -151,6 +151,13 @@
           </a-form-item>
         </a-col>
       </a-row>
+      <a-form-item label='{{ i18n "pages.openflux.key" }}'>
+        <a-input-group compact>
+          <a-input-password v-model.trim="form.encryptionKey" style="width: calc(100% - 150px)"
+            placeholder='{{ i18n "pages.openflux.keyPlaceholder" }}'></a-input-password>
+          <a-button icon="key" style="width: 150px" @click="generateEncryptionKey">{{ i18n "pages.openflux.generateKey" }}</a-button>
+        </a-input-group>
+      </a-form-item>
       <a-form-item label='{{ i18n "pages.openflux.keyFile" }}'>
         <a-input v-model.trim="form.encryptionKeyFile" placeholder="/etc/openflux/key"></a-input>
       </a-form-item>
@@ -236,6 +243,7 @@
     codec: 'batched',
     debug: 1,
     enabled: true,
+    encryptionKey: '',
     encryptionKeyFile: ''
   });
 
@@ -307,6 +315,17 @@
       openForm(record) {
         this.form = record ? { ...record } : defaultOpenFluxForm();
         this.formVisible = true;
+      },
+      generateEncryptionKey() {
+        const bytes = new Uint8Array(32);
+        if (window.crypto && window.crypto.getRandomValues) {
+          window.crypto.getRandomValues(bytes);
+        } else {
+          for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+        }
+        let binary = '';
+        bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+        this.form.encryptionKey = btoa(binary);
       },
       async saveForm() {
         this.saving = true;

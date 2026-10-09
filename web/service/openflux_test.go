@@ -74,3 +74,20 @@ func TestOpenFluxClientCommand(t *testing.T) {
 		t.Fatalf("command = %q, want %q", got, wantCommand)
 	}
 }
+
+func TestOpenFluxInlineKeyUsesManagedFile(t *testing.T) {
+	node := &model.OpenFluxNode{
+		Id:            7,
+		Transport:     "yandex",
+		URL:           "https://disk.yandex.ru/i/FvIK9gb_V-yJWA",
+		Mode:          "l4",
+		Codec:         "batched",
+		Debug:         1,
+		EncryptionKey: "secret",
+	}
+	args := openFluxArgs(node)
+	want := "--encryption-key-file=/etc/openflux/keys/openflux-7.key"
+	if args[len(args)-1] != want {
+		t.Fatalf("last arg = %q, want %q", args[len(args)-1], want)
+	}
+}

@@ -1,4 +1,4 @@
-# OpenFlux в 3x-ui 2.9.4+23wl4
+# OpenFlux в 3x-ui 2.9.4+23wl5
 
 Эта ветка добавляет нативный раздел **OpenFlux** для профилей Yandex Docs / Boards / vyandex и мобильного API L-VPN.
 
@@ -50,6 +50,7 @@ apk add --no-cache git go
 /usr/local/bin/openflux --role=exit --mode=<l4|l3> --transport=<yandex|boards|vyandex> --url=<secret> --codec=batched --debug=<0..3>
 ```
 
+Если указан строковый ключ шифрования, панель пишет его в `/etc/openflux/keys/openflux-<id>.key` с правами `0600` и добавляет `--encryption-key-file=<generated-path>`.
 Если указан файл ключа, добавляется `--encryption-key-file=<path>`.
 
 Если панель запущена в контейнере без systemd, тот же профиль запускается напрямую:
@@ -107,7 +108,8 @@ apk add --no-cache git go
       "client_command": "openflux '--role=client' '--mode=l4' '--transport=yandex' '--url=https://disk.yandex.ru/i/...' '--codec=batched' '--debug=1'",
       "client_args": ["--role=client", "--mode=l4", "--transport=yandex", "--url=https://disk.yandex.ru/i/...", "--codec=batched", "--debug=1"],
       "socks5": "127.0.0.1:1080",
-      "module_config": "{\"carrier\":\"yandex_docs\",\"client_args\":[\"--role=client\",\"--mode=l4\",\"--transport=yandex\",\"--url=https://disk.yandex.ru/i/...\",\"--codec=batched\",\"--debug=1\"],\"client_command\":\"openflux '--role=client' '--mode=l4' '--transport=yandex' '--url=https://disk.yandex.ru/i/...' '--codec=batched' '--debug=1'\",\"codec\":\"batched\",\"debug\":1,\"mode\":\"l4\",\"role\":\"client\",\"socks5\":\"127.0.0.1:1080\",\"transport\":\"yandex\",\"url\":\"https://disk.yandex.ru/i/...\"}",
+      "encryption_key": "base64-key-from-profile",
+      "module_config": "{\"carrier\":\"yandex_docs\",\"client_args\":[\"--role=client\",\"--mode=l4\",\"--transport=yandex\",\"--url=https://disk.yandex.ru/i/...\",\"--codec=batched\",\"--debug=1\"],\"client_command\":\"openflux '--role=client' '--mode=l4' '--transport=yandex' '--url=https://disk.yandex.ru/i/...' '--codec=batched' '--debug=1'\",\"codec\":\"batched\",\"debug\":1,\"encryption\":\"inline\",\"encryption_key\":\"base64-key-from-profile\",\"mode\":\"l4\",\"requires_key_file_materialization\":true,\"role\":\"client\",\"socks5\":\"127.0.0.1:1080\",\"transport\":\"yandex\",\"url\":\"https://disk.yandex.ru/i/...\"}",
       "enabled": true
     }
   ]
@@ -137,12 +139,14 @@ Hub при скане 3x-ui может брать `client_args` как безо�
   "mode": "l4",
   "codec": "batched",
   "debug": 1,
+  "encryptionKey": "base64-key-from-profile",
   "encryptionKeyFile": "",
   "enabled": true
 }
 ```
 
 Если `enabled=true`, backend применяет профиль сразу. Если `/usr/local/bin/openflux` ещё не установлен, он устанавливается автоматически перед запуском профиля.
+Если передан `encryptionKey`, backend сам создаёт серверный key-file; hub получает этот же ключ в `encryption_key` и передаёт его мобильному приложению.
 
 Маппинг carrier:
 
@@ -150,7 +154,7 @@ Hub при скане 3x-ui может брать `client_args` как безо�
 - `boards` -> `cursor_ws`
 - `vyandex` -> `volga_ws`
 
-`module_config` содержит рабочий URL намеренно: мобильному модулю он нужен для подключения. Не публикуйте этот endpoint без штатной защиты подписок.
+`module_config` содержит рабочий URL и может содержать `encryption_key` намеренно: мобильному модулю они нужны для подключения. Не публикуйте этот endpoint без штатной защиты подписок.
 
 ## Ограничения
 
