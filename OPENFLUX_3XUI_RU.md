@@ -1,4 +1,4 @@
-# OpenFlux в 3x-ui 2.9.4+23wl2
+# OpenFlux в 3x-ui 2.9.4+23wl3
 
 Эта ветка добавляет нативный раздел **OpenFlux** для профилей Yandex Docs / Boards / vyandex и мобильного API L-VPN.
 

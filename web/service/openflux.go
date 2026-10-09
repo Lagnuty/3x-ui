@@ -410,6 +410,16 @@ func tailOpenFluxLog(id int, logLines int) string {
 	return strings.Join(lines, "\n")
 }
 
+func (s *OpenFluxService) ensureOpenFluxBinaryInstalled() error {
+	if _, err := os.Stat(openFluxBinaryPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	_, err := s.InstallOrUpdate("HEAD")
+	return err
+}
+
 func (s *OpenFluxService) ApplyUnit(id int) error {
 	if err := requireOpenFluxLinux(); err != nil {
 		return err
@@ -417,6 +427,11 @@ func (s *OpenFluxService) ApplyUnit(id int) error {
 	node, err := s.GetByID(id)
 	if err != nil {
 		return err
+	}
+	if node.Enabled {
+		if err := s.ensureOpenFluxBinaryInstalled(); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(openFluxUnitDir, 0o755); err != nil {
 		return err
@@ -478,6 +493,11 @@ func (s *OpenFluxService) Control(id int, action string) error {
 	case "start", "stop", "restart":
 	default:
 		return fmt.Errorf("unsupported action %q", action)
+	}
+	if action == "start" || action == "restart" {
+		if err := s.ensureOpenFluxBinaryInstalled(); err != nil {
+			return err
+		}
 	}
 	if !openFluxSystemdAvailable() {
 		if action == "stop" || action == "restart" {
