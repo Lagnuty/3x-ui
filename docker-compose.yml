@@ -1,6 +1,6 @@
 services:
   3xui:
-    image: ghcr.io/lagnuty/3x-ui:2.9.4-23wl3
+    image: ghcr.io/lagnuty/3x-ui:2.9.4-23wl4
     container_name: 3xui_app
     # hostname: yourhostname <- optional
     volumes:

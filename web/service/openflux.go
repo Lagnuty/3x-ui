@@ -70,14 +70,17 @@ type OpenFluxStatus struct {
 }
 
 type OpenFluxMobileConnection struct {
-	Name         string `json:"name"`
-	Server       string `json:"server"`
-	Module       string `json:"module"`
-	Protocol     string `json:"protocol"`
-	Transport    string `json:"transport"`
-	Carrier      string `json:"carrier"`
-	ModuleConfig string `json:"module_config"`
-	Enabled      bool   `json:"enabled"`
+	Name          string   `json:"name"`
+	Server        string   `json:"server"`
+	Module        string   `json:"module"`
+	Protocol      string   `json:"protocol"`
+	Transport     string   `json:"transport"`
+	Carrier       string   `json:"carrier"`
+	ClientCommand string   `json:"client_command"`
+	ClientArgs    []string `json:"client_args"`
+	Socks5        string   `json:"socks5"`
+	ModuleConfig  string   `json:"module_config"`
+	Enabled       bool     `json:"enabled"`
 }
 
 type OpenFluxInstallInfo struct {
@@ -256,6 +259,30 @@ func openFluxArgs(node *model.OpenFluxNode) []string {
 		args = append(args, "--encryption-key-file="+node.EncryptionKeyFile)
 	}
 	return args
+}
+
+func openFluxClientArgs(node *model.OpenFluxNode) []string {
+	args := []string{
+		"--role=client",
+		"--mode=" + node.Mode,
+		"--transport=" + node.Transport,
+		"--url=" + node.URL,
+		"--codec=" + node.Codec,
+		"--debug=" + strconv.Itoa(node.Debug),
+	}
+	if node.EncryptionKeyFile != "" {
+		args = append(args, "--encryption-key-file="+node.EncryptionKeyFile)
+	}
+	return args
+}
+
+func openFluxCommand(args []string) string {
+	quoted := make([]string, 0, len(args)+1)
+	quoted = append(quoted, "openflux")
+	for _, arg := range args {
+		quoted = append(quoted, openFluxShellQuote(arg))
+	}
+	return strings.Join(quoted, " ")
 }
 
 func openFluxUnitContent(node *model.OpenFluxNode) string {
@@ -830,23 +857,36 @@ func (s *OpenFluxService) MobileConnections() ([]OpenFluxMobileConnection, error
 		if !node.Enabled {
 			continue
 		}
+		clientArgs := openFluxClientArgs(&node)
+		clientCommand := openFluxCommand(clientArgs)
 		cfg := map[string]any{
-			"transport": node.Transport,
-			"url":       node.URL,
-			"codec":     node.Codec,
-			"mode":      node.Mode,
-			"debug":     node.Debug,
+			"role":           "client",
+			"mode":           node.Mode,
+			"transport":      node.Transport,
+			"url":            node.URL,
+			"codec":          node.Codec,
+			"debug":          node.Debug,
+			"carrier":        openFluxCarrier(node.Transport),
+			"client_args":    clientArgs,
+			"client_command": clientCommand,
+			"socks5":         "127.0.0.1:1080",
+		}
+		if node.EncryptionKeyFile != "" {
+			cfg["encryption_key_file"] = node.EncryptionKeyFile
 		}
 		rawCfg, _ := json.Marshal(cfg)
 		out = append(out, OpenFluxMobileConnection{
-			Name:         node.Name,
-			Server:       node.ServerID,
-			Module:       "openflux_yandex_docs_cursor_ws",
-			Protocol:     "openflux",
-			Transport:    node.Transport,
-			Carrier:      openFluxCarrier(node.Transport),
-			ModuleConfig: string(rawCfg),
-			Enabled:      node.Enabled,
+			Name:          node.Name,
+			Server:        node.ServerID,
+			Module:        "openflux_yandex_docs_cursor_ws",
+			Protocol:      "openflux",
+			Transport:     node.Transport,
+			Carrier:       openFluxCarrier(node.Transport),
+			ClientCommand: clientCommand,
+			ClientArgs:    clientArgs,
+			Socks5:        "127.0.0.1:1080",
+			ModuleConfig:  string(rawCfg),
+			Enabled:       node.Enabled,
 		})
 	}
 	return out, nil

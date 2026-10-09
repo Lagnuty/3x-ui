@@ -138,6 +138,17 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	return inbounds, nil
 }
 
+func (s *SubService) SubIDExists(subId string) (bool, error) {
+	if strings.TrimSpace(subId) == "" {
+		return false, nil
+	}
+	inbounds, err := s.getInboundsBySubId(subId)
+	if err != nil {
+		return false, err
+	}
+	return len(inbounds) > 0, nil
+}
+
 func (s *SubService) getClientTraffics(traffics []xray.ClientTraffic, email string) xray.ClientTraffic {
 	for _, traffic := range traffics {
 		if traffic.Email == email {

@@ -1,4 +1,4 @@
-# OpenFlux в 3x-ui 2.9.4+23wl3
+# OpenFlux в 3x-ui 2.9.4+23wl4
 
 Эта ветка добавляет нативный раздел **OpenFlux** для профилей Yandex Docs / Boards / vyandex и мобильного API L-VPN.
 
@@ -104,12 +104,45 @@ apk add --no-cache git go
       "protocol": "openflux",
       "transport": "yandex",
       "carrier": "yandex_docs",
-      "module_config": "{\"codec\":\"batched\",\"debug\":1,\"mode\":\"l4\",\"transport\":\"yandex\",\"url\":\"https://disk.yandex.ru/i/...\"}",
+      "client_command": "openflux '--role=client' '--mode=l4' '--transport=yandex' '--url=https://disk.yandex.ru/i/...' '--codec=batched' '--debug=1'",
+      "client_args": ["--role=client", "--mode=l4", "--transport=yandex", "--url=https://disk.yandex.ru/i/...", "--codec=batched", "--debug=1"],
+      "socks5": "127.0.0.1:1080",
+      "module_config": "{\"carrier\":\"yandex_docs\",\"client_args\":[\"--role=client\",\"--mode=l4\",\"--transport=yandex\",\"--url=https://disk.yandex.ru/i/...\",\"--codec=batched\",\"--debug=1\"],\"client_command\":\"openflux '--role=client' '--mode=l4' '--transport=yandex' '--url=https://disk.yandex.ru/i/...' '--codec=batched' '--debug=1'\",\"codec\":\"batched\",\"debug\":1,\"mode\":\"l4\",\"role\":\"client\",\"socks5\":\"127.0.0.1:1080\",\"transport\":\"yandex\",\"url\":\"https://disk.yandex.ru/i/...\"}",
       "enabled": true
     }
   ]
 }
 ```
+
+Hub при скане 3x-ui может брать `client_args` как безопасный массив аргументов или `client_command` как готовую CLI-команду для мобильного OpenFlux-клиента.
+
+## Hub CRUD API
+
+Для управления OpenFlux-профилями через hub добавлены write endpoints с проверкой `subid`:
+
+- `GET /api/mobile/openflux/:subid/profiles`
+- `POST /api/mobile/openflux/:subid/profiles`
+- `PUT /api/mobile/openflux/:subid/profiles/:id`
+- `PATCH /api/mobile/openflux/:subid/profiles/:id`
+- `DELETE /api/mobile/openflux/:subid/profiles/:id`
+
+`subid` должен существовать у активного клиента подписки. Создание/редактирование принимает тот же JSON, что UI:
+
+```json
+{
+  "name": "de3 Yandex Doc",
+  "serverId": "de3",
+  "transport": "yandex",
+  "url": "https://disk.yandex.ru/i/FvIK9gb_V-yJWA",
+  "mode": "l4",
+  "codec": "batched",
+  "debug": 1,
+  "encryptionKeyFile": "",
+  "enabled": true
+}
+```
+
+Если `enabled=true`, backend применяет профиль сразу. Если `/usr/local/bin/openflux` ещё не установлен, он устанавливается автоматически перед запуском профиля.
 
 Маппинг carrier:
 

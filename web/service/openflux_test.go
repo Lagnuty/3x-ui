@@ -43,3 +43,34 @@ func TestOpenFluxMobileCarrier(t *testing.T) {
 		t.Fatalf("yandex carrier = %q", got)
 	}
 }
+
+func TestOpenFluxClientCommand(t *testing.T) {
+	node := &model.OpenFluxNode{
+		Transport: "yandex",
+		URL:       "https://disk.yandex.ru/i/FvIK9gb_V-yJWA",
+		Mode:      "l4",
+		Codec:     "batched",
+		Debug:     1,
+	}
+	args := openFluxClientArgs(node)
+	wantArgs := []string{
+		"--role=client",
+		"--mode=l4",
+		"--transport=yandex",
+		"--url=https://disk.yandex.ru/i/FvIK9gb_V-yJWA",
+		"--codec=batched",
+		"--debug=1",
+	}
+	if len(args) != len(wantArgs) {
+		t.Fatalf("args len = %d, want %d: %#v", len(args), len(wantArgs), args)
+	}
+	for i := range wantArgs {
+		if args[i] != wantArgs[i] {
+			t.Fatalf("args[%d] = %q, want %q", i, args[i], wantArgs[i])
+		}
+	}
+	wantCommand := "openflux '--role=client' '--mode=l4' '--transport=yandex' '--url=https://disk.yandex.ru/i/FvIK9gb_V-yJWA' '--codec=batched' '--debug=1'"
+	if got := openFluxCommand(args); got != wantCommand {
+		t.Fatalf("command = %q, want %q", got, wantCommand)
+	}
+}

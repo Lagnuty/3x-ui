@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/config"
+	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 
 	"github.com/gin-gonic/gin"
@@ -97,6 +98,11 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 	}
 	g.GET("/api/mobile/subscriptions", a.mobileSubscriptions)
 	g.GET("/api/mobile/subscriptions/:subid", a.mobileSubscriptions)
+	g.GET("/api/mobile/openflux/:subid/profiles", a.mobileOpenFluxProfiles)
+	g.POST("/api/mobile/openflux/:subid/profiles", a.mobileOpenFluxCreate)
+	g.PUT("/api/mobile/openflux/:subid/profiles/:id", a.mobileOpenFluxUpdate)
+	g.PATCH("/api/mobile/openflux/:subid/profiles/:id", a.mobileOpenFluxUpdate)
+	g.DELETE("/api/mobile/openflux/:subid/profiles/:id", a.mobileOpenFluxDelete)
 }
 
 // subs handles HTTP requests for subscription links, returning either HTML page or base64-encoded subscription data.
@@ -234,6 +240,108 @@ func (a *SUBController) mobileSubscriptions(c *gin.Context) {
 		"success":     true,
 		"connections": connections,
 	})
+}
+
+func (a *SUBController) requireMobileSubID(c *gin.Context) bool {
+	subID := c.Param("subid")
+	exists, err := a.subService.SubIDExists(subID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return false
+	}
+	if !exists {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "subscription_not_found"})
+		return false
+	}
+	return true
+}
+
+func parseMobileOpenFluxID(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid_id"})
+		return 0, false
+	}
+	return id, true
+}
+
+func bindMobileOpenFluxNode(c *gin.Context) (*model.OpenFluxNode, bool) {
+	var node model.OpenFluxNode
+	if err := c.ShouldBind(&node); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return nil, false
+	}
+	return &node, true
+}
+
+func (a *SUBController) mobileOpenFluxProfiles(c *gin.Context) {
+	if !a.requireMobileSubID(c) {
+		return
+	}
+	list, err := a.openFluxService.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	connections, err := a.openFluxService.MobileConnections()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "profiles": list, "connections": connections})
+}
+
+func (a *SUBController) mobileOpenFluxCreate(c *gin.Context) {
+	if !a.requireMobileSubID(c) {
+		return
+	}
+	node, ok := bindMobileOpenFluxNode(c)
+	if !ok {
+		return
+	}
+	if err := a.openFluxService.Create(node); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	connections, _ := a.openFluxService.MobileConnections()
+	c.JSON(http.StatusOK, gin.H{"success": true, "profile": node, "connections": connections})
+}
+
+func (a *SUBController) mobileOpenFluxUpdate(c *gin.Context) {
+	if !a.requireMobileSubID(c) {
+		return
+	}
+	id, ok := parseMobileOpenFluxID(c)
+	if !ok {
+		return
+	}
+	node, ok := bindMobileOpenFluxNode(c)
+	if !ok {
+		return
+	}
+	if err := a.openFluxService.Update(id, node); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	updated, _ := a.openFluxService.GetByID(id)
+	connections, _ := a.openFluxService.MobileConnections()
+	c.JSON(http.StatusOK, gin.H{"success": true, "profile": updated, "connections": connections})
+}
+
+func (a *SUBController) mobileOpenFluxDelete(c *gin.Context) {
+	if !a.requireMobileSubID(c) {
+		return
+	}
+	id, ok := parseMobileOpenFluxID(c)
+	if !ok {
+		return
+	}
+	if err := a.openFluxService.Delete(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	connections, _ := a.openFluxService.MobileConnections()
+	c.JSON(http.StatusOK, gin.H{"success": true, "connections": connections})
 }
 
 // ApplyCommonHeaders sets common HTTP headers for subscription responses including user info, update interval, and profile title.

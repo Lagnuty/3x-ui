@@ -10,7 +10,7 @@ on:
       version:
         description: Image version tag
         required: true
-        default: 2.9.4-23wl3
+        default: 2.9.4-23wl4
       stable_version:
         description: Stable release alias
         required: true
@@ -23,7 +23,7 @@ on:
   push:
     branches:
       - "3xui"
-      - "codex/openflux-2.9.4-23wl3"
+      - "codex/openflux-2.9.4-23wl4"
     tags:
       - "v*.*.*"
 
@@ -48,9 +48,9 @@ jobs:
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=raw,value=2.9.4-23wl3,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/openflux-2.9.4-23wl3') }}
-            type=raw,value=2.9.4,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/openflux-2.9.4-23wl3') }}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/openflux-2.9.4-23wl3') }}
+            type=raw,value=2.9.4-23wl4,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/openflux-2.9.4-23wl4') }}
+            type=raw,value=2.9.4,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/openflux-2.9.4-23wl4') }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/openflux-2.9.4-23wl4') }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=${{ inputs.stable_version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' && inputs.publish_latest }}
