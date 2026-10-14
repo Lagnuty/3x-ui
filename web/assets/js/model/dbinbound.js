@@ -101,7 +101,7 @@ class DBInbound {
             }
         }
         if (stream.network === 'grpc') {
-            add('grpc-transport', 'gRPC transport is deprecated in Xray v26.9.30', 'Migrate to XHTTP stream-up over HTTP/2; v26.9.30 also has a reported reconnect regression.');
+            add('grpc-transport', 'gRPC transport is deprecated in Xray v26.9.30+', 'Migrate to XHTTP stream-up over HTTP/2 before upgrading to the current v26.10.10 baseline.');
         }
 
         const hasLegacyAllowInsecure = value => {

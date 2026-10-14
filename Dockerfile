@@ -5,7 +5,7 @@ FROM golang:1.27-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
 ARG TARGETVARIANT
-ARG XRAY_VERSION=v26.9.30
+ARG XRAY_VERSION=v26.10.10
 
 RUN apk --no-cache --update add \
   build-base \

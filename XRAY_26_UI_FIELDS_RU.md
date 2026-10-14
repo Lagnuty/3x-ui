@@ -1,7 +1,7 @@
-# Технический справочник UI 3x-ui 2.9.4+23wl2
+# Технический справочник UI 3x-ui 2.9.4+24
 
 Документ описывает новые элементы интерфейса, добавленные для Xray
-v26.4.25–v26.9.30. Имена JSON приведены в том виде, в котором панель передаёт
+v26.4.25–v26.10.10. Имена JSON приведены в том виде, в котором панель передаёт
 их Xray. Пустые необязательные значения обычно не должны фиксировать старый
 default: решение остаётся за установленной версией ядра.
 
@@ -110,8 +110,8 @@ JSON: `inbound.settings`.
 | User Level | `userLevel` | integer ≥ 0 | `0`. |
 | Auto Routing Table | `autoSystemRoutingTable` | string array | Примеры: `auto`, `main`, `100`, `vpn`. |
 | Auto Outbounds | `autoOutboundsInterface` | string | `auto`, либо `eth0`, `ens3`, `Ethernet`. |
-| System DNS to Gateway | `autoSystemDnsToGateway` | boolean | Linux v26.9.30+; требует непустой `gateway`. |
-| Windows WFP Leak Block | `autoSystemWfpBlockLeak` | array: `dns`, `misconfigtun` | Windows v26.9.30+; требует auto routing, вариант `dns` также требует DNS. |
+| System DNS to Gateway | `autoSystemDnsToGateway` | boolean | Linux v26.10.10+; требует непустой `gateway`. |
+| Windows WFP Leak Block | `autoSystemWfpBlockLeak` | array: `dns`, `misconfigtun` | Windows v26.10.10+; требует auto routing, вариант `dns` также требует DNS. |
 
 Кнопки `Auto`, `Linux`, `Windows` заполняют routing table/interface типовыми
 значениями. Старый массив `mtu` мигрирует в одно число — первый элемент.
@@ -181,7 +181,7 @@ backend удаляет маску и возвращает migration warning, ч�
   `header-wireguard`;
 - `xicmp`;
 - `xdns`;
-- `noise`, включая packet type `exp` в v26.9.30.
+- `noise`, включая packet type `exp` в v26.10.10.
 
 ### XDNS
 
@@ -349,7 +349,7 @@ JSON: `outbound.settings.reverse.tag`.
 Перед кнопкой установки показываются:
 
 - compatibility matrix для v26.4.25, v26.6.22, v26.6.27, v26.7.28,
-  v26.9.8, v26.9.9 и v26.9.30;
+  v26.9.8, v26.9.9 и v26.10.10;
 - `Affected inbounds` с ID, remark, protocol и списком причин;
 - результат config generation dry-run, число inbound и размер JSON;
 - общие warnings: REALITY/Shadowrocket, reverse regression, gRPC reconnect.

@@ -742,6 +742,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		{Version: "v26.9.8", Title: "REALITY ML-KEM transition", Impact: "X25519MLKEM768 is required before optional X25519; empty minClientVer means no minimum."},
 		{Version: "v26.9.9", Title: "Deprecated feature diagnostics", Impact: "VMess, no-Flow configurations, legacy Shadowsocks and allowInsecure need migration."},
 		{Version: "v26.9.30", Title: "gRPC reconnect behavior", Impact: "A reported v26.9.30 regression can prevent gRPC outbounds reconnecting after the peer restarts; prefer XHTTP stream-up or tunnel-test gRPC."},
+		{Version: "v26.10.10", Title: "Current release baseline", Impact: "Use as the default bundled Xray core for new Docker builds and upgrade planning."},
 	}
 	for i := range checkpoints {
 		checkpoints[i].Active = target >= xrayVersionNumber(checkpoints[i].Version)
@@ -812,7 +813,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 			}
 		}
 		if target >= 26_009_030 && network == "grpc" {
-			reasons = append(reasons, "gRPC transport is deprecated and v26.9.30 has a reported reconnect regression; prefer XHTTP stream-up or test peer restarts")
+			reasons = append(reasons, "gRPC transport is deprecated; prefer XHTTP stream-up or test peer restarts before production rollout")
 		}
 		if target >= 26_004_025 && (containsLegacyAllowInsecure(settings) || containsLegacyAllowInsecure(stream)) {
 			reasons = append(reasons, "legacy allowInsecure must be replaced with verification/pinning")
@@ -830,7 +831,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		plan.Warnings = append(plan.Warnings, "This target is in the v26.5.x/v26.6.1 VLESS reverse regression range; v26.4.25 or v26.6.22+ is recommended.")
 	}
 	if target >= 26_009_030 {
-		plan.Warnings = append(plan.Warnings, "Xray v26.9.30 has a reported gRPC outbound reconnect regression after connection loss; test server restarts before production rollout.")
+		plan.Warnings = append(plan.Warnings, "gRPC transport remains deprecated in the v26.9.30+ line; prefer XHTTP stream-up for new deployments.")
 	}
 
 	generated, generateErr := s.xrayService.GetXrayConfig()

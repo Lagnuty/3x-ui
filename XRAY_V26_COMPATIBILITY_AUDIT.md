@@ -1,6 +1,6 @@
 # Xray v26 compatibility audit
 
-Audit target: Xray `v26.9.30` (`b26a91d`) and the compatibility work described
+Audit target: Xray `v26.10.10` (`current`) and the compatibility work described
 in items 1-22. The audit is intentionally split between schema validation,
 migration tests, subscription validation, and platform build checks: a config
 accepted by Xray alone does not prove that old saved data or client exports work.
@@ -11,9 +11,9 @@ accepted by Xray alone does not prove that old saved data or client exports work
 |---|---|---|
 | 1 | XHTTP session ID fields | Old keys migrate to `sessionID*`; inbound/outbound UI, links, imports, and Mihomo extras use the new names. |
 | 2 | XHTTP/3 and UDP hop | QUIC/UDP hop fields and compatibility hints are present; the current Xray fixture exercises the schema. |
-| 3 | gRPC trusted XFF | gRPC exposes `trustedXForwardedFor`; release diagnostics also warn about the v26.9.30 reconnect risk and gRPC deprecation. |
-| 4 | WireGuard workers | `workers` and `num_workers` are removed during migration and never emitted. Removed v26.9.30 WireGuard fields are normalized too. |
-| 5 | TUN routing | Routing table/interface plus v26.9.30 DNS/WFP fields are modeled and validated. Linux root/TUN/capability and Windows elevation readiness are reported. |
+| 3 | gRPC trusted XFF | gRPC exposes `trustedXForwardedFor`; release diagnostics also warn about the v26.10.10 reconnect risk and gRPC deprecation. |
+| 4 | WireGuard workers | `workers` and `num_workers` are removed during migration and never emitted. Removed v26.10.10 WireGuard fields are normalized too. |
+| 5 | TUN routing | Routing table/interface plus v26.10.10 DNS/WFP fields are modeled and validated. Linux root/TUN/capability and Windows elevation readiness are reported. |
 | 6 | TUN counters | Nested and legacy Xray counter names are accepted, so TUN inbounds use the normal traffic display/reset pipeline. |
 | 7 | Hysteria VLESS route | Routing UI, share link and Mihomo `vless-route` export are present; old Hysteria2 shapes migrate to the current Hysteria model. |
 | 8 | FinalMask XMC | Editor, strict profile/UUID/secret/texture validation, migration stripping, warnings and exports are covered. |
@@ -28,14 +28,14 @@ accepted by Xray alone does not prove that old saved data or client exports work
 | 17 | MPH matcher cache | UI reports automatic MPH lifecycle, HIT/MISS, startup duration and geodata errors; rebuild restarts the core-managed cache. |
 | 18 | VLESS reverse | UI, version-range warnings, legacy mapping migration and a live TCP/HTTP tunnel probe are present. |
 | 19 | Deprecations | Inbound warnings/filter and modern VLESS REALITY/Vision conversion cover VMess, missing Flow, legacy Shadowsocks and `allowInsecure`. |
-| 20 | Release switcher | Version matrix includes every requested checkpoint through v26.9.30, affected inbounds, generated-config dry-run, candidate `run -test`, rollback and REALITY/Shadowrocket warning. |
+| 20 | Release switcher | Version matrix includes every requested checkpoint through v26.10.10, affected inbounds, generated-config dry-run, candidate `run -test`, rollback and REALITY/Shadowrocket warning. |
 | 21 | Shares/subscriptions | XHTTP/FinalMask/REALITY parameters, Mihomo extras, `extra=` fallback and version/client compatibility decisions are covered. Unsupported official sing-box extensions fail explicitly instead of producing invalid JSON. |
 | 22 | Migration layer | XHTTP, WireGuard, REALITY, XMC, TLS pinning and Hysteria/Hysteria2 migrations are centralized and unit-tested. |
 
 ## Executed checks
 
-- Xray `v26.9.30` real binary: `run -test` accepts
-  `testdata/xray-v26.9.30-compat.json`.
+- Xray `v26.10.10` real binary: `run -test` accepts
+  `testdata/xray-v26.10.10-compat.json`.
 - Mihomo `v1.19.32`: real binary accepts
   `testdata/mihomo-v1.19.32-compat.yaml`.
 - sing-box `v1.14.1`: real binary accepts the supported fixture and the
@@ -55,7 +55,7 @@ must still be run in that target image or CI when a Docker daemon is available.
 
 ## Scope note
 
-The requested 1-22 compatibility scope is covered. Xray v26.9.30 also contains
+The requested 1-22 compatibility scope is covered. Xray v26.10.10 also contains
 newer transports such as XDRIVE and MASQUE; they were not in the requested
 scope and do not yet have dedicated panel editors or subscription formats.
 They should be treated as a separate feature patch, not as silently supported
