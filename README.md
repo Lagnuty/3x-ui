@@ -22,6 +22,10 @@
 
 As an enhanced fork of the original X-UI project, 3X-UI provides improved stability, broader protocol support, and additional features.
 
+## About this fork
+
+This fork is for people who want to stay on the familiar **3x-ui 2.x** panel instead of moving to 3x-ui 3.x, while continuing to receive updates for newer Xray-core releases. We update the 2.x interface, configuration generation, compatibility checks, and deployment files as Xray changes. Support for a new Xray feature depends on the panel version; check the release notes before upgrading the core. This fork is maintained independently of the upstream 3.x line.
+
 ## Quick Start
 
 ```bash
