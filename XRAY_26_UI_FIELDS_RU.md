@@ -1,7 +1,7 @@
-# Технический справочник UI 3x-ui 2.9.4+24
+# Технический справочник UI 3x-ui 2.9.4+24/+25
 
 Документ описывает новые элементы интерфейса, добавленные для Xray
-v26.4.25–v26.10.10. Имена JSON приведены в том виде, в котором панель передаёт
+v26.4.25–v26.10.17. Имена JSON приведены в том виде, в котором панель передаёт
 их Xray. Пустые необязательные значения обычно не должны фиксировать старый
 default: решение остаётся за установленной версией ядра.
 
@@ -187,17 +187,35 @@ backend удаляет маску и возвращает migration warning, ч�
 
 | Поле UI | JSON | Тип / ограничения | Default |
 |---|---|---|---|
-| Domain | `domains[].name` | string | Пусто. |
+| Domains | `domains[].names` | string array | Пустой массив; одна запись может содержать несколько доменных имён. |
 | Length Limit | `domains[].lenLimit` | integer 1–255 | `255`. |
 | Label Limit | `domains[].labelLimit` | integer 1–63 | `63`. |
 | DNS Types | `domains[].types` | integer array | Например `1,28` для A/AAAA. |
 | EDNS0 | `domains[].edns0` | integer ≥ 0 | `0`. |
-| Resolver Type | `resolvers[].type` | `udp` или `tcp` | `udp`. |
-| Resolver Address | `resolvers[].settings.addr` | `host:port` | Пример `1.1.1.1:53`. |
+| Resolver Addresses | `resolvers[].addrs` | string array | Например `1.1.1.1:53`, `tcp://1.1.1.1:53` или `https://dns.example/dns-query`; без схемы используется UDP. |
+| Resolver Workers | `resolvers[].worker` | integer ≥ 0 | Пусто/`0` = default Xray (32). |
+| Resolver TLS | `resolvers[].tlsConfig` | object или отсутствует | Необязательная конфигурация TLS для DoH. |
+| DoH TLS server name | `resolvers[].tlsConfig.serverName` | string | Имя для TLS-проверки. |
+| DoH certificate SHA256 pin | `resolvers[].tlsConfig.pinnedPeerCertSha256` | string | Необязательный SHA256 сертификата. |
+| Use system CAs | `resolvers[].tlsConfig.useSystemCA` | boolean | Выключено: встроенные корневые сертификаты Xray. |
+| QUIC config | `resolvers[].quicConfig` | object или отсутствует | Сохраняется в JSON, отдельного редактора пока нет. |
 | Extra Poll | `extraPoll` | integer 0–3 | `0`. |
 
 Старый `domains: ["example.org"]` превращается в объект с лимитами 255/63,
-пустыми types и EDNS0=0.
+пустыми types и EDNS0=0. При миграции значения `name`, `type` и
+`settings.addr` преобразуются соответственно в `names`, адрес с нужной схемой
+в `addrs`; устаревшие ключи не передаются ядру v26.10.17.
+
+## TLS outbound: системные корневые сертификаты
+
+Расположение: редактор outbound → TLS → `Use system CAs`.
+JSON: `streamSettings.tlsSettings.useSystemCA`.
+
+По умолчанию переключатель выключен, а поле не записывается в JSON: начиная с
+Xray v26.10.10 ядро использует собственный набор корневых сертификатов. При
+включении записывается `true`, и Xray проверяет цепочку по системному хранилищу
+сертификатов. На Ubuntu в контейнере это хранилище внутри образа, а не на
+хосте. Переключатель не отменяет проверку имени и не заменяет certificate pin.
 
 ### QUIC / UDP hop
 
