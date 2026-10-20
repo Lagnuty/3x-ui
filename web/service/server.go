@@ -814,7 +814,11 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 			}
 		}
 		if target >= 26_009_030 && network == "grpc" {
-			reasons = append(reasons, "gRPC transport is deprecated; prefer XHTTP stream-up or test peer restarts before production rollout")
+			if target < 26_010_017 {
+				reasons = append(reasons, "gRPC transport is deprecated and may fail to reconnect after a peer restart; prefer XHTTP stream-up or test recovery")
+			} else {
+				reasons = append(reasons, "gRPC transport is deprecated; its peer-restart reconnect regression is fixed in v26.10.17, but XHTTP stream-up is preferred for new deployments")
+			}
 		}
 		if target >= 26_004_025 && (containsLegacyAllowInsecure(settings) || containsLegacyAllowInsecure(stream)) {
 			reasons = append(reasons, "legacy allowInsecure must be replaced with verification/pinning")
