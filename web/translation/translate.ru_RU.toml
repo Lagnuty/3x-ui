@@ -340,6 +340,8 @@
 "clientTlsVerification" = "Проверка TLS для клиента"
 "clientTlsVerificationHint" = "Эти клиентские поля экспортируются в подписки и не добавляются в серверный inbound config. allowInsecure устарел; используйте pin leaf-сертификата и при необходимости проверку имени."
 "tlsPinHelp" = "Укажите один или несколько SHA256 hex по 64 символа через запятую"
+"useSystemCA" = "Использовать CA операционной системы"
+"useSystemCAHint" = "Xray v26.10.10+ по умолчанию проверяет исходящий TLS по встроенным корневым CA. Включайте, если нужный CA установлен в системе. Проверка имени и pin сертификата сохраняются."
 "allowInsecureRemovedHint" = "allowInsecure удален в текущих ядрах Xray. Закрепите leaf-сертификат или сочетайте CA pin с ServerName/Verify Peer Cert By Name. После ротации сертификата обновите pin."
 "realClientIpGrpcHint" = "Реальный IP клиента за CDN/relay: Xray v26.6.22+ также получает IP gRPC-клиента из доверенных forwarded-заголовков."
 "deprecatedReverseHint" = "Обнаружена устаревшая top-level reverse конфигурация"

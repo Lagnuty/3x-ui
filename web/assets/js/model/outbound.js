@@ -548,6 +548,7 @@ class TlsStreamSettings extends CommonClass {
         echConfigList = '',
         verifyPeerCertByName = '',
         pinnedPeerCertSha256 = '',
+        useSystemCA = false,
     ) {
         super();
         this.serverName = serverName;
@@ -556,6 +557,7 @@ class TlsStreamSettings extends CommonClass {
         this.echConfigList = echConfigList;
         this.verifyPeerCertByName = verifyPeerCertByName;
         this.pinnedPeerCertSha256 = normalizePinnedPeerCertSha256(pinnedPeerCertSha256);
+        this.useSystemCA = !!useSystemCA;
     }
 
     static fromJson(json = {}) {
@@ -566,6 +568,7 @@ class TlsStreamSettings extends CommonClass {
             json.echConfigList,
             json.verifyPeerCertByName,
             json.pinnedPeerCertSha256,
+            json.useSystemCA,
         );
     }
 
@@ -576,7 +579,8 @@ class TlsStreamSettings extends CommonClass {
             fingerprint: this.fingerprint,
             echConfigList: this.echConfigList,
             verifyPeerCertByName: this.verifyPeerCertByName,
-            pinnedPeerCertSha256: normalizePinnedPeerCertSha256(this.pinnedPeerCertSha256)
+            pinnedPeerCertSha256: normalizePinnedPeerCertSha256(this.pinnedPeerCertSha256),
+            useSystemCA: this.useSystemCA || undefined
         };
     }
 }

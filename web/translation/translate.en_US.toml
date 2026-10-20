@@ -340,6 +340,8 @@
 "clientTlsVerification" = "Client TLS verification"
 "clientTlsVerificationHint" = "These client-side fields are exported to subscription profiles and are not added to the inbound server config. allowInsecure is deprecated; use a leaf certificate pin and optional verification name."
 "tlsPinHelp" = "Use one or more 64-character hex SHA256 values separated by commas"
+"useSystemCA" = "Use operating system CAs"
+"useSystemCAHint" = "Xray v26.10.10+ verifies outbound TLS with its bundled root CAs by default. Enable only when the destination uses a CA installed in this system. Certificate pins and name checks still apply."
 "allowInsecureRemovedHint" = "allowInsecure is removed in current Xray cores. Pin the leaf certificate, or combine a CA pin with ServerName/Verify Peer Cert By Name. Re-fetch leaf pins after certificate rotation."
 "realClientIpGrpcHint" = "Real client IP behind CDN/relay: Xray v26.6.22+ also resolves gRPC client IP from trusted forwarded headers."
 "deprecatedReverseHint" = "Deprecated top-level reverse configuration detected"

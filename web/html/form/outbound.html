@@ -1197,6 +1197,10 @@
             <a-input v-model.trim="outbound.stream.tls.verifyPeerCertByName"
               placeholder="cloudflare-dns.com,alt.example.com"></a-input>
           </a-form-item>
+          <a-form-item label='{{ i18n "pages.inbounds.useSystemCA" }}'>
+            <a-switch v-model="outbound.stream.tls.useSystemCA"></a-switch>
+            <div>{{ i18n "pages.inbounds.useSystemCAHint" }}</div>
+          </a-form-item>
           <a-form-item label="Pinned Peer Cert SHA256"
             :validate-status="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? 'success' : 'error'"
             :help="isValidTLSPin(outbound.stream.tls.pinnedPeerCertSha256) ? '' : '{{ i18n "pages.inbounds.tlsPinHelp" }}'">
