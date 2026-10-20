@@ -1113,6 +1113,56 @@ class FinalMaskStreamSettings extends CommonClass {
     }
 }
 
+class XDriveStreamSettings extends CommonClass {
+    constructor(json = {}) {
+        super();
+        this.remoteFolder = json.remoteFolder ?? '';
+        this.service = json.service === 'Google Drive' ? 'google-drive' : (json.service ?? 'local');
+        this.secrets = Array.isArray(json.secrets) ? [...json.secrets] : ['', '', ''];
+        for (const key of ['segmentBytes', 'flushIntervalMs', 'pollIntervalMs', 'maxPollIntervalMs',
+            'sessionTtlSeconds', 'concurrency', 'eagerWindowMs', 'holeTimeoutMs']) {
+            this[key] = json[key] ?? 0;
+        }
+        this.template = json.template ?? undefined;
+    }
+
+    static fromJson(json = {}) { return new XDriveStreamSettings(json); }
+
+    toJson() {
+        const result = { service: this.service, remoteFolder: this.remoteFolder };
+        if (this.service === 'google-drive') result.secrets = this.secrets;
+        if (this.service === 'template') result.template = this.template;
+        for (const key of ['segmentBytes', 'flushIntervalMs', 'pollIntervalMs', 'maxPollIntervalMs',
+            'sessionTtlSeconds', 'concurrency', 'eagerWindowMs', 'holeTimeoutMs']) {
+            if (Number(this[key]) > 0) result[key] = Number(this[key]);
+        }
+        return result;
+    }
+}
+
+function validateXDriveOutbound(outbound) {
+    if (outbound?.stream?.network !== 'xdrive') return '';
+    if (outbound.protocol !== Protocols.VLESS) return 'XDRIVE supports only VLESS.';
+    if (outbound.stream.security === 'reality') return 'XDRIVE does not support REALITY. Use TLS or no transport security.';
+    if (!outbound.settings?.encryption || outbound.settings.encryption === 'none') {
+        return 'XDRIVE requires VLESS encryption. Generate a pair with xray vlessenc.';
+    }
+    if (outbound.settings.flow) return 'XDRIVE does not support VLESS Flow.';
+    if (outbound.settings.testpre) return 'XDRIVE does not support VLESS testpre.';
+    if (!outbound.settings.reverseTag && (!outbound.mux?.enabled || outbound.mux.concurrency < 0 ||
+        outbound.mux.xudpConcurrency < 0 || outbound.mux.xudpProxyUDP443 === 'skip')) {
+        return 'XDRIVE needs enabled Mux, nonnegative concurrency values and xudpProxyUDP443 other than skip.';
+    }
+    const drive = outbound.stream.xdrive;
+    if (drive.service === 'google-drive' && (drive.secrets.length !== 3 || drive.secrets.some(secret => !secret))) {
+        return 'Google Drive requires Client ID, Client secret and Refresh token.';
+    }
+    if (drive.service === 'template' && (!drive.template || typeof drive.template !== 'object')) {
+        return 'XDRIVE template service requires a template JSON object.';
+    }
+    return '';
+}
+
 class StreamSettings extends CommonClass {
     constructor(
         network = 'tcp',
@@ -1128,6 +1178,7 @@ class StreamSettings extends CommonClass {
         hysteriaSettings = new HysteriaStreamSettings(),
         finalmask = new FinalMaskStreamSettings(),
         sockopt = undefined,
+        xdriveSettings = new XDriveStreamSettings(),
     ) {
         super();
         this.network = network;
@@ -1143,6 +1194,7 @@ class StreamSettings extends CommonClass {
         this.hysteria = hysteriaSettings;
         this.finalmask = finalmask;
         this.sockopt = sockopt;
+        this.xdrive = xdriveSettings;
     }
 
     addTcpMask(type = 'fragment') {
@@ -1203,6 +1255,7 @@ class StreamSettings extends CommonClass {
             HysteriaStreamSettings.fromJson(json.hysteriaSettings),
             FinalMaskStreamSettings.fromJson(json.finalmask),
             SockoptStreamSettings.fromJson(json.sockopt),
+            XDriveStreamSettings.fromJson(json.xdriveSettings),
         );
     }
 
@@ -1222,6 +1275,7 @@ class StreamSettings extends CommonClass {
             hysteriaSettings: network === 'hysteria' ? this.hysteria.toJson() : undefined,
             finalmask: this.hasFinalMask ? this.finalmask.toJson() : undefined,
             sockopt: this.sockopt != undefined ? this.sockopt.toJson() : undefined,
+            xdriveSettings: network === 'xdrive' ? this.xdrive.toJson() : undefined,
         };
     }
 }
@@ -1286,7 +1340,7 @@ class Outbound extends CommonClass {
     canEnableTls() {
         if (this.protocol === Protocols.Hysteria) return true;
         if (![Protocols.VMess, Protocols.VLESS, Protocols.Trojan, Protocols.Shadowsocks].includes(this.protocol)) return false;
-        return ["tcp", "ws", "http", "grpc", "httpupgrade", "xhttp"].includes(this.stream.network);
+        return ["tcp", "ws", "http", "grpc", "httpupgrade", "xhttp", "xdrive"].includes(this.stream.network);
     }
 
     //this is used for xtls-rprx-vision

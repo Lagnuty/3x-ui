@@ -32,6 +32,18 @@
                 app.$message.error(xmcError);
                 return;
             }
+            const xdriveError = validateXDriveOutbound(outModal.outbound);
+            if (xdriveError) {
+                app.$message.error(xdriveError);
+                return;
+            }
+            if (outModal.outbound.stream.network === 'xdrive') {
+                const version = String(outModal.xrayVersion).match(/(?:v)?(\d+)\.(\d+)\.(\d+)/);
+                if (version && (Number(version[1]) * 1000000 + Number(version[2]) * 1000 + Number(version[3])) < 26010017) {
+                    app.$message.error('XDRIVE requires Xray v26.10.17 or newer.');
+                    return;
+                }
+            }
             ObjectUtil.execute(outModal.confirm, outModal.outbound.toJson());
         },
         show({

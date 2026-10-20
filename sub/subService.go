@@ -83,7 +83,9 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 					hasEnabledClient = true
 				}
 				link := s.getLink(inbound, client.Email)
-				result = append(result, link)
+				if link != "" {
+					result = append(result, link)
+				}
 				ct := s.getClientTraffics(inbound.ClientStats, client.Email)
 				clientTraffics = append(clientTraffics, ct)
 				if ct.LastOnline > lastOnline {
@@ -171,6 +173,12 @@ func (s *SubService) getFallbackMaster(dest string, streamSettings string) (stri
 }
 
 func (s *SubService) getLink(inbound *model.Inbound, email string) string {
+	// XDRIVE requires service credentials and VLESS encryption. A vless:// URI
+	// cannot carry these settings safely or portably, so omit it from links.
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	if stream["network"] == "xdrive" {
+		return ""
+	}
 	switch inbound.Protocol {
 	case "vmess":
 		return s.genVmessLink(inbound, email)

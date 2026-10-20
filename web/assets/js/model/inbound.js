@@ -1529,6 +1529,52 @@ class FinalMaskStreamSettings extends XrayCommonClass {
     }
 }
 
+class XDriveStreamSettings extends XrayCommonClass {
+    constructor(json = {}) {
+        super();
+        this.remoteFolder = json.remoteFolder ?? '';
+        this.service = json.service === 'Google Drive' ? 'google-drive' : (json.service ?? 'local');
+        this.secrets = Array.isArray(json.secrets) ? [...json.secrets] : ['', '', ''];
+        for (const key of ['segmentBytes', 'flushIntervalMs', 'pollIntervalMs', 'maxPollIntervalMs',
+            'sessionTtlSeconds', 'concurrency', 'eagerWindowMs', 'holeTimeoutMs']) {
+            this[key] = json[key] ?? 0;
+        }
+        this.template = json.template ?? undefined;
+    }
+
+    static fromJson(json = {}) { return new XDriveStreamSettings(json); }
+
+    toJson() {
+        const result = { service: this.service, remoteFolder: this.remoteFolder };
+        if (this.service === 'google-drive') result.secrets = this.secrets;
+        if (this.service === 'template') result.template = this.template;
+        for (const key of ['segmentBytes', 'flushIntervalMs', 'pollIntervalMs', 'maxPollIntervalMs',
+            'sessionTtlSeconds', 'concurrency', 'eagerWindowMs', 'holeTimeoutMs']) {
+            if (Number(this[key]) > 0) result[key] = Number(this[key]);
+        }
+        return result;
+    }
+}
+
+function validateXDriveInbound(inbound) {
+    if (inbound?.stream?.network !== 'xdrive') return '';
+    if (inbound.protocol !== Protocols.VLESS) return 'XDRIVE supports only VLESS.';
+    if (inbound.stream.security === 'reality') return 'XDRIVE does not support REALITY. Use TLS or no transport security.';
+    if (!inbound.settings?.decryption || inbound.settings.decryption === 'none') {
+        return 'XDRIVE requires VLESS decryption. Generate a pair with xray vlessenc.';
+    }
+    if (inbound.settings.vlesses?.some(client => client.flow)) return 'XDRIVE does not support VLESS Flow.';
+    if (!Number.isInteger(Number(inbound.port)) || Number(inbound.port) < 1) return 'XDRIVE requires one listening port.';
+    const drive = inbound.stream.xdrive;
+    if (drive.service === 'google-drive' && (drive.secrets.length !== 3 || drive.secrets.some(secret => !secret))) {
+        return 'Google Drive requires Client ID, Client secret and Refresh token.';
+    }
+    if (drive.service === 'template' && (!drive.template || typeof drive.template !== 'object')) {
+        return 'XDRIVE template service requires a template JSON object.';
+    }
+    return '';
+}
+
 class StreamSettings extends XrayCommonClass {
     constructor(network = 'tcp',
         security = 'none',
@@ -1544,6 +1590,7 @@ class StreamSettings extends XrayCommonClass {
         hysteriaSettings = new HysteriaStreamSettings(),
         finalmask = new FinalMaskStreamSettings(),
         sockopt = undefined,
+        xdriveSettings = new XDriveStreamSettings(),
     ) {
         super();
         this.network = network;
@@ -1560,6 +1607,7 @@ class StreamSettings extends XrayCommonClass {
         this.hysteria = hysteriaSettings;
         this.finalmask = finalmask;
         this.sockopt = sockopt;
+        this.xdrive = xdriveSettings;
     }
 
     addTcpMask(type = 'fragment') {
@@ -1638,6 +1686,7 @@ class StreamSettings extends XrayCommonClass {
             HysteriaStreamSettings.fromJson(json.hysteriaSettings),
             FinalMaskStreamSettings.fromJson(json.finalmask),
             SockoptStreamSettings.fromJson(json.sockopt),
+            XDriveStreamSettings.fromJson(json.xdriveSettings),
         );
     }
 
@@ -1658,6 +1707,7 @@ class StreamSettings extends XrayCommonClass {
             hysteriaSettings: network === 'hysteria' ? this.hysteria.toJson() : undefined,
             finalmask: this.hasFinalMask ? this.finalmask.toJson() : undefined,
             sockopt: this.sockopt != undefined ? this.sockopt.toJson() : undefined,
+            xdriveSettings: network === 'xdrive' ? this.xdrive.toJson() : undefined,
         };
     }
 }
@@ -2018,7 +2068,7 @@ class Inbound extends XrayCommonClass {
     canEnableTls() {
         if (this.protocol === Protocols.HYSTERIA) return true;
         if (![Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS].includes(this.protocol)) return false;
-        return ["tcp", "ws", "http", "grpc", "httpupgrade", "xhttp"].includes(this.network);
+        return ["tcp", "ws", "http", "grpc", "httpupgrade", "xhttp", "xdrive"].includes(this.network);
     }
 
     //this is used for xtls-rprx-vision
@@ -2126,6 +2176,9 @@ class Inbound extends XrayCommonClass {
     }
 
     genVLESSLink(address = '', port = this.port, forceTls, remark = '', clientId, flow) {
+        // XDRIVE needs service credentials and a VLESS encryption pair; a raw
+        // vless:// URI cannot safely or portably describe either side.
+        if (this.stream.network === 'xdrive') return '';
         const uuid = clientId;
         const type = this.stream.network;
         const security = forceTls == 'same' ? this.stream.security : forceTls;
@@ -2527,6 +2580,7 @@ class Inbound extends XrayCommonClass {
     }
 
     genAllLinks(remark = '', remarkModel = '-ieo', client) {
+        if (this.stream.network === 'xdrive') return [];
         let result = [];
         let email = client ? client.email : '';
         let addr = !ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0" ? this.listen : location.hostname;

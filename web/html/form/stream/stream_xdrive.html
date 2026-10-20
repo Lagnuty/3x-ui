@@ -1,0 +1,32 @@
+{{define "form/streamXDrive"}}
+<a-form :colon="false" :label-col="{ md: {span:8} }" :wrapper-col="{ md: {span:14} }">
+  <a-alert type="warning" show-icon style="margin-bottom: 12px"
+    message="XDRIVE requires Xray v26.10.17+ and VLESS decryption. Every client must have empty Flow; use one listening port. Raw vless:// links and older clients do not describe this transport."></a-alert>
+  <a-form-item label="Service">
+    <a-select v-model="inbound.stream.xdrive.service" :dropdown-class-name="themeSwitcher.currentTheme">
+      <a-select-option value="local">Local</a-select-option>
+      <a-select-option value="google-drive">Google Drive</a-select-option>
+      <a-select-option value="template" disabled>Template (JSON editor only)</a-select-option>
+    </a-select>
+  </a-form-item>
+  <a-form-item label="Remote folder">
+    <a-input v-model.trim="inbound.stream.xdrive.remoteFolder" placeholder="Shared folder on both peers"></a-input>
+  </a-form-item>
+  <template v-if="inbound.stream.xdrive.service === 'google-drive'">
+    <a-form-item label="Client ID"><a-input v-model.trim="inbound.stream.xdrive.secrets[0]"></a-input></a-form-item>
+    <a-form-item label="Client secret"><a-input-password v-model.trim="inbound.stream.xdrive.secrets[1]"></a-input-password></a-form-item>
+    <a-form-item label="Refresh token"><a-input-password v-model.trim="inbound.stream.xdrive.secrets[2]"></a-input-password></a-form-item>
+  </template>
+  <a-alert v-if="inbound.stream.xdrive.service === 'template'" type="info" show-icon
+    message="Existing template JSON is preserved. Edit its template object in the raw JSON editor."></a-alert>
+  <a-form-item label="Segment bytes"><a-input-number v-model.number="inbound.stream.xdrive.segmentBytes" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Flush interval (ms)"><a-input-number v-model.number="inbound.stream.xdrive.flushIntervalMs" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Poll interval (ms)"><a-input-number v-model.number="inbound.stream.xdrive.pollIntervalMs" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Max poll interval (ms)"><a-input-number v-model.number="inbound.stream.xdrive.maxPollIntervalMs" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Session TTL (s)"><a-input-number v-model.number="inbound.stream.xdrive.sessionTtlSeconds" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Concurrency"><a-input-number v-model.number="inbound.stream.xdrive.concurrency" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Eager window (ms)"><a-input-number v-model.number="inbound.stream.xdrive.eagerWindowMs" :min="0"></a-input-number></a-form-item>
+  <a-form-item label="Hole timeout (ms)"><a-input-number v-model.number="inbound.stream.xdrive.holeTimeoutMs" :min="0"></a-input-number></a-form-item>
+  <a-alert type="info" show-icon message="Zero tuning values are omitted so Xray chooses its own defaults."></a-alert>
+</a-form>
+{{end}}
