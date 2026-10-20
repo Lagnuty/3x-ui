@@ -54,8 +54,8 @@
             {
               "type": "xdns",
               "settings": {
-                "domains": [{ "name": "dns.example", "lenLimit": 255, "labelLimit": 63, "types": [1, 28], "edns0": 0 }],
-                "resolvers": [{ "type": "udp", "settings": { "addr": "1.1.1.1:53" } }],
+                "domains": [{ "names": ["dns.example"], "lenLimit": 255, "labelLimit": 63, "types": [1, 28], "edns0": 0 }],
+                "resolvers": [{ "addrs": ["1.1.1.1:53", "https://dns.example/dns-query"], "worker": 2 }],
                 "extraPoll": 1
               }
             }
@@ -114,6 +114,7 @@
         "tlsSettings": {
           "serverName": "example.com",
           "fingerprint": "chrome",
+          "useSystemCA": true,
           "verifyPeerCertByName": "example.com",
           "pinnedPeerCertSha256": "0000000000000000000000000000000000000000000000000000000000000000"
         },

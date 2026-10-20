@@ -945,10 +945,11 @@
             <template v-if="mask.type === 'xdns'">
               <a-form-item label="Domains">
                 <a-button icon="plus" size="small"
-                  @click="mask.settings.domains.push({name:'',lenLimit:255,labelLimit:63,types:[],edns0:0})"></a-button>
+                  @click="mask.settings.domains.push({names:[],lenLimit:255,labelLimit:63,types:[],edns0:0})"></a-button>
               </a-form-item>
               <a-input-group compact v-for="(domain, domainIndex) in mask.settings.domains" :key="'xd'+domainIndex">
-                <a-input v-model.trim="domain.name" placeholder="dns.example" :style="{ width: '35%' }"></a-input>
+                <a-select mode="tags" v-model="domain.names" :token-separators="[',']"
+                  placeholder="dns.example, backup.example" :style="{ width: '52%' }"></a-select>
                 <a-input-number v-model.number="domain.lenLimit" :min="1" :max="255" :style="{ width: '18%' }"></a-input-number>
                 <a-input-number v-model.number="domain.labelLimit" :min="1" :max="63" :style="{ width: '18%' }"></a-input-number>
                 <a-button icon="minus" @click="mask.settings.domains.splice(domainIndex, 1)"></a-button>
@@ -961,15 +962,37 @@
               </a-form-item>
               <a-form-item label="Resolvers">
                 <a-button icon="plus" size="small"
-                  @click="mask.settings.resolvers.push({type:'udp',settings:{addr:'1.1.1.1:53'}})"></a-button>
+                  @click="mask.settings.resolvers.push({addrs:['1.1.1.1:53'],worker:0,tlsConfig:null,quicConfig:null})"></a-button>
               </a-form-item>
               <a-input-group compact v-for="(resolver, resolverIndex) in mask.settings.resolvers" :key="'xr'+resolverIndex">
-                <a-select v-model="resolver.type" :style="{ width: '25%' }">
-                  <a-select-option value="udp">UDP</a-select-option><a-select-option value="tcp">TCP</a-select-option>
-                </a-select>
-                <a-input v-model.trim="resolver.settings.addr" placeholder="1.1.1.1:53" :style="{ width: '60%' }"></a-input>
+                <a-select mode="tags" v-model="resolver.addrs" :token-separators="[',']"
+                  placeholder="1.1.1.1:53, tcp://1.1.1.1:53, https://dns.example/dns-query"
+                  :style="{ width: '75%' }"></a-select>
                 <a-button icon="minus" @click="mask.settings.resolvers.splice(resolverIndex, 1)"></a-button>
               </a-input-group>
+              <template v-for="(resolver, resolverIndex) in mask.settings.resolvers">
+                <a-form-item :key="'xrw'+resolverIndex" :label="`Resolver workers #${resolverIndex + 1}`">
+                  <a-input-number v-model.number="resolver.worker" :min="0" placeholder="0 = core default (32)"></a-input-number>
+                </a-form-item>
+                <a-form-item :key="'xrt'+resolverIndex" :label="`Resolver TLS #${resolverIndex + 1}`">
+                  <a-switch :checked="!!resolver.tlsConfig"
+                    @change="enabled => resolver.tlsConfig = enabled ? {serverName:'',fingerprint:'chrome'} : null"></a-switch>
+                </a-form-item>
+                <template v-if="resolver.tlsConfig">
+                  <a-form-item :key="'xrts'+resolverIndex" label="DoH TLS server name">
+                    <a-input v-model.trim="resolver.tlsConfig.serverName" placeholder="dns.example"></a-input>
+                  </a-form-item>
+                  <a-form-item :key="'xrtp'+resolverIndex" label="DoH certificate SHA256 pin">
+                    <a-input v-model.trim="resolver.tlsConfig.pinnedPeerCertSha256" placeholder="Optional 64-character hex SHA256"></a-input>
+                  </a-form-item>
+                  <a-form-item :key="'xrtca'+resolverIndex" label="Use system CAs">
+                    <a-switch v-model="resolver.tlsConfig.useSystemCA"></a-switch>
+                  </a-form-item>
+                </template>
+              </template>
+              <a-alert type="info" show-icon
+                message="Xray v26.10.17: resolvers accept UDP/TCP addresses and DoH https:// URLs. An address without a scheme uses UDP. Empty worker uses the core default (32)."
+                style="margin-bottom: 12px"></a-alert>
               <a-form-item label="Extra Poll"><a-input-number v-model.number="mask.settings.extraPoll" :min="0" :max="3" /></a-form-item>
             </template>
             <template v-if="mask.type === 'noise'">

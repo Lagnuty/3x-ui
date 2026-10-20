@@ -241,6 +241,12 @@ func normalizeStreamSettings(streamSettings string) string {
 	return string(normalized)
 }
 
+// NormalizeStreamSettings applies the same compatibility migrations to raw
+// outbound streams stored in the Xray template as to database inbounds.
+func NormalizeStreamSettings(streamSettings string) string {
+	return normalizeStreamSettings(streamSettings)
+}
+
 func normalizeXHTTPStreamSettings(stream map[string]any) bool {
 	xhttp, ok := stream["xhttpSettings"].(map[string]any)
 	if !ok || xhttp == nil {
@@ -542,28 +548,81 @@ func normalizeLegacyFinalMaskUDPSettings(mask map[string]any) map[string]any {
 			}
 		}
 	case "xdns":
+		if settings == nil {
+			return mask
+		}
+		copySettings := map[string]any{}
+		for key, value := range settings {
+			copySettings[key] = value
+		}
+		changed := false
 		if domains, ok := settings["domains"].([]any); ok {
 			converted := make([]any, 0, len(domains))
-			changed := false
 			for _, domain := range domains {
 				if name, legacy := domain.(string); legacy {
-					converted = append(converted, map[string]any{"name": name, "lenLimit": 255, "labelLimit": 63, "types": []any{}, "edns0": 0})
+					converted = append(converted, map[string]any{"names": []any{name}, "lenLimit": 255, "labelLimit": 63, "types": []any{}, "edns0": 0})
+					changed = true
+					continue
+				}
+				entry, ok := domain.(map[string]any)
+				if !ok {
+					converted = append(converted, domain)
+					continue
+				}
+				if name, legacy := entry["name"].(string); legacy {
+					copyEntry := map[string]any{}
+					for key, value := range entry {
+						copyEntry[key] = value
+					}
+					copyEntry["names"] = []any{name}
+					delete(copyEntry, "name")
+					converted = append(converted, copyEntry)
 					changed = true
 				} else {
 					converted = append(converted, domain)
 				}
 			}
-			if changed {
-				copySettings := map[string]any{}
-				for key, value := range settings {
-					copySettings[key] = value
+			copySettings["domains"] = converted
+		}
+		if resolvers, ok := settings["resolvers"].([]any); ok {
+			converted := make([]any, 0, len(resolvers))
+			for _, resolver := range resolvers {
+				entry, ok := resolver.(map[string]any)
+				if !ok {
+					converted = append(converted, resolver)
+					continue
 				}
-				copySettings["domains"] = converted
-				if _, exists := copySettings["resolvers"]; !exists {
-					copySettings["resolvers"] = []any{}
+				if _, modern := entry["addrs"]; modern {
+					converted = append(converted, resolver)
+					continue
 				}
-				return map[string]any{"type": "xdns", "settings": copySettings}
+				legacySettings, _ := entry["settings"].(map[string]any)
+				addr, _ := legacySettings["addr"].(string)
+				if addr == "" {
+					addr, _ = entry["addr"].(string)
+				}
+				if addr == "" {
+					converted = append(converted, resolver)
+					continue
+				}
+				copyEntry := map[string]any{}
+				for key, value := range entry {
+					copyEntry[key] = value
+				}
+				if entry["type"] == "tcp" && !strings.Contains(addr, "://") {
+					addr = "tcp://" + addr
+				}
+				copyEntry["addrs"] = []any{addr}
+				delete(copyEntry, "type")
+				delete(copyEntry, "settings")
+				delete(copyEntry, "addr")
+				converted = append(converted, copyEntry)
+				changed = true
 			}
+			copySettings["resolvers"] = converted
+		}
+		if changed {
+			return map[string]any{"type": "xdns", "settings": copySettings}
 		}
 	}
 	return mask

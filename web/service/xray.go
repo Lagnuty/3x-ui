@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/xray"
 
@@ -113,6 +114,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		return nil, err
 	}
 	xrayConfig.OutboundConfigs = normalizeWireGuardOutbounds(xrayConfig.OutboundConfigs)
+	xrayConfig.OutboundConfigs = normalizeOutboundStreams(xrayConfig.OutboundConfigs)
 
 	_, _, _ = s.inboundService.AddTraffic(nil, nil)
 
@@ -207,6 +209,42 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
 	return xrayConfig, nil
+}
+
+func normalizeOutboundStreams(raw []byte) []byte {
+	var outbounds []map[string]any
+	if err := json.Unmarshal(raw, &outbounds); err != nil {
+		return raw
+	}
+	changed := false
+	for _, outbound := range outbounds {
+		stream, ok := outbound["streamSettings"].(map[string]any)
+		if !ok {
+			continue
+		}
+		streamJSON, err := json.Marshal(stream)
+		if err != nil {
+			continue
+		}
+		normalized := model.NormalizeStreamSettings(string(streamJSON))
+		if normalized == string(streamJSON) {
+			continue
+		}
+		var normalizedStream map[string]any
+		if err := json.Unmarshal([]byte(normalized), &normalizedStream); err != nil {
+			continue
+		}
+		outbound["streamSettings"] = normalizedStream
+		changed = true
+	}
+	if !changed {
+		return raw
+	}
+	normalized, err := json.Marshal(outbounds)
+	if err != nil {
+		return raw
+	}
+	return normalized
 }
 
 func normalizeWireGuardOutbounds(raw []byte) []byte {

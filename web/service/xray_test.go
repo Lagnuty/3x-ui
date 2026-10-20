@@ -35,3 +35,21 @@ func TestNormalizeWireGuardOutboundsDropsWorkers(t *testing.T) {
 		t.Fatalf("secretKey = %v, want key", settings["secretKey"])
 	}
 }
+
+func TestNormalizeOutboundStreamsMigratesXDNS(t *testing.T) {
+	raw := []byte(`[{"protocol":"vless","streamSettings":{"network":"kcp","finalmask":{"udp":[{"type":"xdns","settings":{"domains":[{"name":"dns.example"}],"resolvers":[{"type":"tcp","settings":{"addr":"9.9.9.9:53"}}]}}]}}}]`)
+	normalized := normalizeOutboundStreams(raw)
+	var outbounds []map[string]any
+	if err := json.Unmarshal(normalized, &outbounds); err != nil {
+		t.Fatal(err)
+	}
+	stream := outbounds[0]["streamSettings"].(map[string]any)
+	mask := stream["finalmask"].(map[string]any)["udp"].([]any)[0].(map[string]any)
+	settings := mask["settings"].(map[string]any)
+	if settings["domains"].([]any)[0].(map[string]any)["names"].([]any)[0] != "dns.example" {
+		t.Fatalf("domains = %#v", settings["domains"])
+	}
+	if settings["resolvers"].([]any)[0].(map[string]any)["addrs"].([]any)[0] != "tcp://9.9.9.9:53" {
+		t.Fatalf("resolvers = %#v", settings["resolvers"])
+	}
+}

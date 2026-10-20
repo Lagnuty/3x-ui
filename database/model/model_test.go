@@ -141,7 +141,7 @@ func TestNormalizeStreamSettingsKeepsCompleteFinalMaskXMC(t *testing.T) {
 }
 
 func TestNormalizeStreamSettingsMigratesLegacyFinalMaskUDPShapes(t *testing.T) {
-	stream := `{"finalmask":{"udp":[{"type":"header-wireguard","settings":{}},{"type":"xicmp","settings":{"ip":"1.1.1.1","id":1}},{"type":"xdns","settings":{"domains":["dns.example"]}}]}}`
+	stream := `{"finalmask":{"udp":[{"type":"header-wireguard","settings":{}},{"type":"xicmp","settings":{"ip":"1.1.1.1","id":1}},{"type":"xdns","settings":{"domains":["dns.example",{"name":"backup.example","types":[1]}],"resolvers":[{"type":"udp","settings":{"addr":"1.1.1.1:53"}},{"type":"tcp","settings":{"addr":"9.9.9.9:53"}}]}}]}}`
 	normalized := normalizeStreamSettings(stream)
 	var got map[string]any
 	if err := json.Unmarshal([]byte(normalized), &got); err != nil {
@@ -156,8 +156,13 @@ func TestNormalizeStreamSettingsMigratesLegacyFinalMaskUDPShapes(t *testing.T) {
 		t.Fatalf("xicmp = %#v", settings)
 	}
 	xdnsSettings := udp[2].(map[string]any)["settings"].(map[string]any)
-	if xdnsSettings["domains"].([]any)[0].(map[string]any)["name"] != "dns.example" {
+	domains := xdnsSettings["domains"].([]any)
+	if domains[0].(map[string]any)["names"].([]any)[0] != "dns.example" || domains[1].(map[string]any)["names"].([]any)[0] != "backup.example" {
 		t.Fatalf("xdns = %#v", xdnsSettings)
+	}
+	resolvers := xdnsSettings["resolvers"].([]any)
+	if resolvers[0].(map[string]any)["addrs"].([]any)[0] != "1.1.1.1:53" || resolvers[1].(map[string]any)["addrs"].([]any)[0] != "tcp://9.9.9.9:53" {
+		t.Fatalf("xdns resolvers = %#v", resolvers)
 	}
 }
 

@@ -1211,13 +1211,18 @@ class UdpMask extends XrayCommonClass {
             case 'xdns':
                 return {
                     domains: Array.isArray(settings.domains) ? settings.domains.map(domain => typeof domain === 'string' ? {
-                        name: domain, lenLimit: 255, labelLimit: 63, types: [], edns0: 0,
+                        names: [domain], lenLimit: 255, labelLimit: 63, types: [], edns0: 0,
                     } : {
-                        name: domain.name ?? '', lenLimit: domain.lenLimit ?? 255, labelLimit: domain.labelLimit ?? 63,
+                        names: Array.isArray(domain.names) ? domain.names : (domain.name ? [domain.name] : []),
+                        lenLimit: domain.lenLimit ?? 255, labelLimit: domain.labelLimit ?? 63,
                         types: Array.isArray(domain.types) ? domain.types : [], edns0: domain.edns0 ?? 0,
                     }) : [],
                     resolvers: Array.isArray(settings.resolvers) ? settings.resolvers.map(resolver => ({
-                        type: resolver.type ?? 'udp', settings: { addr: resolver.settings?.addr ?? '' },
+                        addrs: Array.isArray(resolver.addrs) ? resolver.addrs : (resolver.settings?.addr || resolver.addr
+                            ? [(resolver.type === 'tcp' ? 'tcp://' : '') + (resolver.settings?.addr || resolver.addr)] : []),
+                        worker: resolver.worker ?? 0,
+                        tlsConfig: resolver.tlsConfig ?? null,
+                        quicConfig: resolver.quicConfig ?? null,
                     })) : [],
                     extraPoll: settings.extraPoll ?? 0,
                 };
@@ -1288,9 +1293,17 @@ class UdpMask extends XrayCommonClass {
             settings = {
                 ...settings,
                 domains: (settings.domains || []).map(domain => ({
-                    ...domain,
+                    names: (domain.names || []).map(name => String(name).trim()).filter(Boolean),
+                    lenLimit: Number(domain.lenLimit) || 255,
+                    labelLimit: Number(domain.labelLimit) || 63,
                     types: (domain.types || []).map(Number).filter(Number.isFinite),
                     edns0: Number(domain.edns0) || 0,
+                })),
+                resolvers: (settings.resolvers || []).map(resolver => ({
+                    addrs: (resolver.addrs || []).map(addr => String(addr).trim()).filter(Boolean),
+                    worker: Number(resolver.worker) || undefined,
+                    tlsConfig: resolver.tlsConfig || undefined,
+                    quicConfig: resolver.quicConfig || undefined,
                 })),
             };
         } else if (this.type === 'header-custom' && settings) {

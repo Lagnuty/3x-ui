@@ -15,7 +15,7 @@ func TestLatestXrayCompatibility(t *testing.T) {
 	if binary == "" {
 		t.Skip("XRAY_LATEST_BINARY is not set")
 	}
-	config := filepath.Join("..", "testdata", "xray-v26.10.10-compat.json")
+	config := filepath.Join("..", "testdata", "xray-v26.10.17-compat.json")
 	output, err := exec.Command(binary, "run", "-test", "-c", config).CombinedOutput()
 	if err != nil {
 		t.Fatalf("latest Xray rejected compatibility config: %v\n%s", err, output)
