@@ -217,6 +217,33 @@ Xray v26.10.10 ядро использует собственный набор �
 сертификатов. На Ubuntu в контейнере это хранилище внутри образа, а не на
 хосте. Переключатель не отменяет проверку имени и не заменяет certificate pin.
 
+## XDRIVE для VLESS (v26.10.17+)
+
+Расположение: редактор VLESS inbound/outbound → Transport → `XDRIVE`.
+JSON: `streamSettings.network = "xdrive"` и `streamSettings.xdriveSettings`.
+
+| Поле UI | JSON | Тип / поведение |
+|---|---|---|
+| Service | `service` | `local` или `google-drive`; старое `Google Drive` нормализуется. `template` сохраняется, но создаётся через JSON. |
+| Remote folder | `remoteFolder` | Строка; согласуйте на обоих концах. |
+| Client ID / Client secret / Refresh token | `secrets[0..2]` | Три значения в указанном порядке, только для Google Drive. |
+| Segment bytes | `segmentBytes` | Неотрицательное число; `0` не передаётся. |
+| Flush / Poll / Max poll interval | `flushIntervalMs`, `pollIntervalMs`, `maxPollIntervalMs` | Миллисекунды; `0` не передаётся. |
+| Session TTL | `sessionTtlSeconds` | Секунды; `0` не передаётся. |
+| Concurrency | `concurrency` | Неотрицательное число; `0` не передаётся. |
+| Eager window / Hole timeout | `eagerWindowMs`, `holeTimeoutMs` | Миллисекунды; `0` не передаётся. |
+
+Для inbound нужен `settings.decryption != "none"`, один listening port и пустой
+Flow у всех клиентов. Для outbound нужен `settings.encryption != "none"`, пустой
+Flow, нулевой `testpre` и `mux.enabled = true` (кроме reverse-соединения);
+`mux.concurrency` и `mux.xudpConcurrency` не могут быть отрицательными,
+`xudpProxyUDP443` не может быть `skip`. Пару ключей получают командой
+`xray vlessenc`. `REALITY` с XDRIVE не сочетается.
+
+Обычный `vless://` не описывает XDRIVE и не экспортируется панелью для такого
+inbound. Google Drive secrets не следует помещать в обычную публичную
+подписку. Поддержка XDRIVE клиентом должна проверяться отдельно.
+
 ### QUIC / UDP hop
 
 `QUIC Params` показываются для Hysteria и XHTTP/3.
