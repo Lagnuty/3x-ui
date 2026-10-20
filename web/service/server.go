@@ -742,7 +742,8 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		{Version: "v26.9.8", Title: "REALITY ML-KEM transition", Impact: "X25519MLKEM768 is required before optional X25519; empty minClientVer means no minimum."},
 		{Version: "v26.9.9", Title: "Deprecated feature diagnostics", Impact: "VMess, no-Flow configurations, legacy Shadowsocks and allowInsecure need migration."},
 		{Version: "v26.9.30", Title: "gRPC reconnect behavior", Impact: "A reported v26.9.30 regression can prevent gRPC outbounds reconnecting after the peer restarts; prefer XHTTP stream-up or tunnel-test gRPC."},
-		{Version: "v26.10.10", Title: "Current release baseline", Impact: "Use as the default bundled Xray core for new Docker builds and upgrade planning."},
+		{Version: "v26.10.10", Title: "Lua and TLS trust store", Impact: "DNS/routing Lua scripts were added; outbound TLS now uses Xray's bundled root CAs unless useSystemCA is enabled."},
+		{Version: "v26.10.17", Title: "XDRIVE and XHTTP fixes", Impact: "XDRIVE requires VLESS Multiplex+Encryption; XHTTP XMUX connection limits and gRPC reconnect behavior were fixed."},
 	}
 	for i := range checkpoints {
 		checkpoints[i].Active = target >= xrayVersionNumber(checkpoints[i].Version)

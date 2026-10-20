@@ -10,7 +10,7 @@ on:
       version:
         description: Image version tag
         required: true
-        default: 2.9.4-24
+        default: 2.9.4-25
       stable_version:
         description: Stable release alias
         required: true
@@ -75,7 +75,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8,linux/arm/v7,linux/386
           build-args: |
-            XRAY_VERSION=v26.10.10
+            XRAY_VERSION=v26.10.17
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
