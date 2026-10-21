@@ -10,7 +10,7 @@ on:
       version:
         description: Image version tag
         required: true
-        default: 2.9.4-25
+        default: 2.9.4-26
       stable_version:
         description: Stable release alias
         required: true
@@ -25,6 +25,7 @@ on:
       - "3xui"
       - "codex/2.9.4-24-xray-26.10.10"
       - "codex/2.9.4-25-xray-26.10.17"
+      - "codex/2.9.4-26-xray-26.10.21"
     tags:
       - "v*.*.*"
 
@@ -51,8 +52,9 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=2.9.4-24,enable=${{ github.event_name == 'push' && (github.ref_name == '3xui' || github.ref_name == 'codex/2.9.4-24-xray-26.10.10') }}
             type=raw,value=2.9.4-25,enable=${{ github.event_name == 'push' && github.ref_name == 'codex/2.9.4-25-xray-26.10.17' }}
-            type=raw,value=2.9.4,enable=${{ github.event_name == 'push' && github.ref_name == 'codex/2.9.4-25-xray-26.10.17' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref_name == 'codex/2.9.4-25-xray-26.10.17' }}
+            type=raw,value=2.9.4-26,enable=${{ github.event_name == 'push' && github.ref_name == 'codex/2.9.4-26-xray-26.10.21' }}
+            type=raw,value=2.9.4,enable=${{ github.event_name == 'push' && github.ref_name == 'codex/2.9.4-26-xray-26.10.21' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref_name == 'codex/2.9.4-26-xray-26.10.21' }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=${{ inputs.stable_version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' && inputs.publish_latest }}
@@ -77,7 +79,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8,linux/arm/v7,linux/386
           build-args: |
-            XRAY_VERSION=v26.10.17
+            XRAY_VERSION=v26.10.21
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

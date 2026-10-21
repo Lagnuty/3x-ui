@@ -1,11 +1,11 @@
 # ========================================================
 # Stage: Builder
 # ========================================================
-FROM golang:1.27-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
 ARG TARGETVARIANT
-ARG XRAY_VERSION=v26.10.17
+ARG XRAY_VERSION=v26.10.21
 
 RUN apk --no-cache --update add \
   build-base \

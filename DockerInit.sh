@@ -3,7 +3,7 @@ set -eu
 
 TARGET_ARCH="${1:-amd64}"
 TARGET_VARIANT="${2:-}"
-XRAY_VERSION="${3:-v26.10.17}"
+XRAY_VERSION="${3:-v26.10.21}"
 
 case "${TARGET_ARCH}/${TARGET_VARIANT}" in
     amd64/)

@@ -744,6 +744,7 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 		{Version: "v26.9.30", Title: "gRPC reconnect behavior", Impact: "A reported v26.9.30 regression can prevent gRPC outbounds reconnecting after the peer restarts; prefer XHTTP stream-up or tunnel-test gRPC."},
 		{Version: "v26.10.10", Title: "Lua and TLS trust store", Impact: "DNS/routing Lua scripts were added; outbound TLS now uses Xray's bundled root CAs unless useSystemCA is enabled."},
 		{Version: "v26.10.17", Title: "XDRIVE and XHTTP fixes", Impact: "XDRIVE requires VLESS Multiplex+Encryption; XHTTP XMUX connection limits and gRPC reconnect behavior were fixed."},
+		{Version: "v26.10.21", Title: "Urgent TLS trust update", Impact: "Rebuild with Go 1.27.3 and updated bundled RootCAs to reject compromised intermediates; FinalMask inbound filter and XDRIVE H3/XMUX are available."},
 	}
 	for i := range checkpoints {
 		checkpoints[i].Active = target >= xrayVersionNumber(checkpoints[i].Version)
@@ -837,6 +838,9 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 	}
 	if target >= 26_009_030 {
 		plan.Warnings = append(plan.Warnings, "gRPC transport remains deprecated in the v26.9.30+ line; prefer XHTTP stream-up for new deployments.")
+	}
+	if target >= 26_010_010 && target < 26_010_021 {
+		plan.Warnings = append(plan.Warnings, "Xray v26.10.10 and v26.10.17 trust compromised intermediate CAs. Upgrade to v26.10.21 or newer; update Xray-based clients separately.")
 	}
 
 	generated, generateErr := s.xrayService.GetXrayConfig()
