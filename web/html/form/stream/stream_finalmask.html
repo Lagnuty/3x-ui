@@ -209,10 +209,10 @@
     </template>
   </template>
 
-  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.protocol == Protocols.WIREGUARD || inbound.stream.network == 'kcp' || inbound.protocol == Protocols.SHADOWSOCKS || (['xhttp', 'xdrive'].includes(inbound.stream.network) && inbound.stream.security === 'tls' && inbound.stream.tls.alpn.includes('h3'))">
+  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.protocol == Protocols.WIREGUARD || inbound.stream.network == 'kcp' || inbound.protocol == Protocols.SHADOWSOCKS || (['xhttp', 'xdrive'].includes(inbound.stream.network) && inbound.stream.security === 'tls' && inbound.stream.tls.alpn.length === 1 && inbound.stream.tls.alpn[0] === 'h3')">
     <a-form-item label="UDP Masks">
       <a-button icon="plus" type="primary" size="small"
-        @click="inbound.stream.addUdpMask(inbound.protocol === Protocols.HYSTERIA ? 'salamander' : (['xhttp', 'xdrive'].includes(inbound.stream.network) ? 'filter' : 'mkcp-aes128gcm'))"></a-button>
+        @click="inbound.stream.addUdpMask(inbound.protocol === Protocols.HYSTERIA ? 'salamander' : (inbound.stream.network === 'xdrive' ? 'noise' : (inbound.stream.network === 'xhttp' ? 'filter' : 'mkcp-aes128gcm')))"></a-button>
     </a-form-item>
     <template v-if="inbound.stream.finalmask.udp && inbound.stream.finalmask.udp.length > 0">
       <a-form v-for="(mask, index) in inbound.stream.finalmask.udp" :key="index" :colon="false"
@@ -465,7 +465,7 @@
   </template>
 
   <!-- quicParams – only for xhttp H3 and hysteria -->
-  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.stream.network == 'xhttp' || (inbound.stream.network == 'xdrive' && inbound.stream.security === 'tls' && inbound.stream.tls.alpn.includes('h3'))">
+  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.stream.network == 'xhttp' || (inbound.stream.network == 'xdrive' && inbound.stream.security === 'tls' && inbound.stream.tls.alpn.length === 1 && inbound.stream.tls.alpn[0] === 'h3')">
     <a-form-item label="QUIC Params">
       <a-switch v-model="inbound.stream.finalmask.enableQuicParams"></a-switch>
     </a-form-item>

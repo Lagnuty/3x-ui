@@ -1,0 +1,28 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [{
+    "tag": "filtered-xhttp",
+    "listen": "127.0.0.1",
+    "port": 31021,
+    "protocol": "vless",
+    "settings": {
+      "decryption": "none",
+      "clients": [{ "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8" }]
+    },
+    "streamSettings": {
+      "network": "xhttp",
+      "security": "none",
+      "xhttpSettings": { "path": "/filter-test", "mode": "packet-up" },
+      "finalmask": {
+        "tcp": [{
+          "type": "filter",
+          "settings": {
+            "allowedSourceIPs": ["127.0.0.0/8", "::1/128"],
+            "blockedSourceIPs": ["127.0.0.2/32"]
+          }
+        }]
+      }
+    }
+  }],
+  "outbounds": [{ "tag": "direct", "protocol": "freedom", "settings": {} }]
+}

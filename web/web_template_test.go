@@ -25,6 +25,15 @@ func TestEmbeddedStreamSettingsIncludesXDriveEditor(t *testing.T) {
 	if !strings.Contains(rendered.String(), "XDRIVE (v26.10.17+)") {
 		t.Fatal("XDRIVE option missing from rendered stream settings")
 	}
+	rendered.Reset()
+	if err := tpl.ExecuteTemplate(&rendered, "form/streamXDrive", nil); err != nil {
+		t.Fatalf("render XDRIVE editor: %v", err)
+	}
+	for _, field := range []string{"templateText", "hrefPath", "Use H3", "enableXmux", "maxConnections"} {
+		if !strings.Contains(rendered.String(), field) {
+			t.Fatalf("XDRIVE editor is missing %q", field)
+		}
+	}
 }
 
 func TestEmbeddedFinalMaskIncludesSourceIPFilter(t *testing.T) {

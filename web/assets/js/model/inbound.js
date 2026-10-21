@@ -1550,6 +1550,13 @@ class XDriveStreamSettings extends XrayCommonClass {
             this[key] = json[key] ?? 0;
         }
         this.template = json.template ?? undefined;
+        this.templateText = JSON.stringify(this.template ?? {}, null, 2);
+        this.enableXmux = json.xmux != null && Object.keys(json.xmux).length > 0;
+        this.xmux = {
+            maxConcurrency: 0, maxConnections: 0, cMaxReuseTimes: 0,
+            hMaxRequestTimes: 0, hMaxReusableSecs: 0, hKeepAlivePeriod: 0,
+            ...(json.xmux ?? {}),
+        };
     }
 
     static fromJson(json = {}) { return new XDriveStreamSettings(json); }
@@ -1557,7 +1564,11 @@ class XDriveStreamSettings extends XrayCommonClass {
     toJson() {
         const result = { service: this.service, remoteFolder: this.remoteFolder };
         if (this.service === 'google-drive') result.secrets = this.secrets;
-        if (this.service === 'template') result.template = this.template;
+        if (this.service === 'template') {
+            try { result.template = JSON.parse(this.templateText); }
+            catch (_) { result.template = this.template; }
+        }
+        if (this.enableXmux) result.xmux = { ...this.xmux };
         for (const key of ['segmentBytes', 'flushIntervalMs', 'pollIntervalMs', 'maxPollIntervalMs',
             'sessionTtlSeconds', 'concurrency', 'eagerWindowMs', 'holeTimeoutMs']) {
             if (Number(this[key]) > 0) result[key] = Number(this[key]);
@@ -1579,8 +1590,21 @@ function validateXDriveInbound(inbound) {
     if (drive.service === 'google-drive' && (drive.secrets.length !== 3 || drive.secrets.some(secret => !secret))) {
         return 'Google Drive requires Client ID, Client secret and Refresh token.';
     }
-    if (drive.service === 'template' && (!drive.template || typeof drive.template !== 'object')) {
-        return 'XDRIVE template service requires a template JSON object.';
+    if (drive.service === 'template') {
+        try {
+            const parsed = JSON.parse(drive.templateText);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.keys(parsed).length === 0) throw new Error('empty object');
+        } catch (_) { return 'XDRIVE template must be a valid JSON object.'; }
+    }
+    const isH3 = inbound.stream.security === 'tls' && inbound.stream.tls?.alpn?.length === 1 && inbound.stream.tls.alpn[0] === 'h3';
+    if (drive.service === 'google-drive' && isH3 && inbound.stream.finalmask?.udp?.some(mask => mask.type !== 'noise')) {
+        return 'Google Drive XDRIVE over H3 supports only UDP noise masks.';
+    }
+    if (isH3 && ['brutal', 'force-brutal'].includes(inbound.stream.finalmask?.quicParams?.congestion)) {
+        return 'XDRIVE H3 requires BBR or Reno congestion, not Brutal.';
+    }
+    if (drive.enableXmux && Number(drive.xmux.maxConnections) > 0 && Number(drive.xmux.maxConcurrency) > 0) {
+        return 'XDRIVE XMUX maxConnections and maxConcurrency cannot both be set.';
     }
     return '';
 }

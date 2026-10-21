@@ -662,7 +662,7 @@
             <a-select v-model="outbound.stream.xdrive.service" :dropdown-class-name="themeSwitcher.currentTheme">
               <a-select-option value="local">Local</a-select-option>
               <a-select-option value="google-drive">Google Drive</a-select-option>
-              <a-select-option value="template" disabled>Template (JSON editor only)</a-select-option>
+              <a-select-option value="template">Template</a-select-option>
             </a-select>
           </a-form-item>
           <a-form-item label="Remote folder"><a-input v-model.trim="outbound.stream.xdrive.remoteFolder"></a-input></a-form-item>
@@ -672,7 +672,28 @@
             <a-form-item label="Refresh token"><a-input-password v-model.trim="outbound.stream.xdrive.secrets[2]"></a-input-password></a-form-item>
           </template>
           <a-alert v-if="outbound.stream.xdrive.service === 'template'" type="info" show-icon
-            message="Existing template JSON is preserved. Edit its template object in the JSON tab."></a-alert>
+            message="Template supports two-step storage APIs: set hrefPath and optional hrefMethod on put/get/list/delete operations. Keep credentials in the first request only."></a-alert>
+          <a-form-item v-if="outbound.stream.xdrive.service === 'template'" label="Template JSON">
+            <a-textarea v-model="outbound.stream.xdrive.templateText" :rows="10" placeholder='{"put":{"url":"https://api.example/upload","hrefPath":"href","hrefMethod":"PUT"}}'></a-textarea>
+          </a-form-item>
+          <a-form-item label="HTTP/3">
+            <a-button size="small" :disabled="outbound.stream.security !== 'tls'"
+              @click="outbound.stream.tls.alpn = ['h3']">Use H3</a-button>
+            <a-button size="small" :disabled="outbound.stream.security !== 'tls'"
+              @click="outbound.stream.tls.alpn = ['h2']">Use H2</a-button>
+            <a-tag v-if="outbound.stream.security === 'tls' && outbound.stream.tls.alpn.length === 1 && outbound.stream.tls.alpn[0] === 'h3'">H3 active</a-tag>
+          </a-form-item>
+          <a-alert type="info" show-icon message="XDRIVE H3 requires TLS ALPN exactly h3. Google Drive H3 permits only UDP noise masks; QUIC congestion must be BBR or Reno. The core sends Chrome-like HTTP headers by default."></a-alert>
+          <a-form-item label="XMUX override"><a-switch v-model="outbound.stream.xdrive.enableXmux"></a-switch></a-form-item>
+          <template v-if="outbound.stream.xdrive.enableXmux">
+            <a-alert type="info" show-icon message="Without an override, Xray uses 4 H2 connections for Google Drive and 1 otherwise. Do not set both maxConnections and maxConcurrency."></a-alert>
+            <a-form-item label="Max connections"><a-input v-model.trim="outbound.stream.xdrive.xmux.maxConnections" placeholder="1 or 1-4"></a-input></a-form-item>
+            <a-form-item label="Max concurrency"><a-input v-model.trim="outbound.stream.xdrive.xmux.maxConcurrency" placeholder="0 or 16-32"></a-input></a-form-item>
+            <a-form-item label="Client max reuse"><a-input v-model.trim="outbound.stream.xdrive.xmux.cMaxReuseTimes" placeholder="0"></a-input></a-form-item>
+            <a-form-item label="H max requests"><a-input v-model.trim="outbound.stream.xdrive.xmux.hMaxRequestTimes" placeholder="0 or 600-900"></a-input></a-form-item>
+            <a-form-item label="H reusable seconds"><a-input v-model.trim="outbound.stream.xdrive.xmux.hMaxReusableSecs" placeholder="1800-3000"></a-input></a-form-item>
+            <a-form-item label="H keep-alive seconds"><a-input-number v-model.number="outbound.stream.xdrive.xmux.hKeepAlivePeriod" :min="0"></a-input-number></a-form-item>
+          </template>
           <a-form-item label="Segment bytes"><a-input-number v-model.number="outbound.stream.xdrive.segmentBytes" :min="0"></a-input-number></a-form-item>
           <a-form-item label="Flush interval (ms)"><a-input-number v-model.number="outbound.stream.xdrive.flushIntervalMs" :min="0"></a-input-number></a-form-item>
           <a-form-item label="Poll interval (ms)"><a-input-number v-model.number="outbound.stream.xdrive.pollIntervalMs" :min="0"></a-input-number></a-form-item>
@@ -916,9 +937,9 @@
         </template>
 
         <a-form-item label="UDP Masks"
-          v-if="outbound.stream.network === 'kcp' || outbound.protocol === Protocols.Hysteria || outbound.protocol === Protocols.Wireguard || outbound.protocol === Protocols.Shadowsocks">
+          v-if="outbound.stream.network === 'kcp' || outbound.protocol === Protocols.Hysteria || outbound.protocol === Protocols.Wireguard || outbound.protocol === Protocols.Shadowsocks || (outbound.stream.network === 'xdrive' && outbound.stream.security === 'tls' && outbound.stream.tls.alpn.length === 1 && outbound.stream.tls.alpn[0] === 'h3')">
           <a-button icon="plus" type="primary" size="small"
-            @click="outbound.stream.addUdpMask(outbound.protocol === Protocols.Hysteria ? 'salamander' : 'mkcp-aes128gcm')"></a-button>
+            @click="outbound.stream.addUdpMask(outbound.protocol === Protocols.Hysteria ? 'salamander' : (outbound.stream.network === 'xdrive' ? 'noise' : 'mkcp-aes128gcm'))"></a-button>
         </a-form-item>
         <template v-if="outbound.stream.finalmask.udp && outbound.stream.finalmask.udp.length > 0">
           <a-form v-for="(mask, index) in outbound.stream.finalmask.udp" :key="index" :colon="false"
@@ -1144,7 +1165,7 @@
         </template>
 
         <!-- quicParams – only for xhttp H3 and hysteria -->
-        <template v-if="outbound.stream.network === 'xhttp' || outbound.protocol === Protocols.Hysteria">
+        <template v-if="outbound.stream.network === 'xhttp' || outbound.protocol === Protocols.Hysteria || (outbound.stream.network === 'xdrive' && outbound.stream.security === 'tls' && outbound.stream.tls.alpn.length === 1 && outbound.stream.tls.alpn[0] === 'h3')">
           <a-form-item label="QUIC Params">
             <a-switch v-model="outbound.stream.finalmask.enableQuicParams"></a-switch>
           </a-form-item>
