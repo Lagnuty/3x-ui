@@ -1,7 +1,7 @@
 # Технический справочник UI 3x-ui 2.9.4+24/+25
 
 Документ описывает новые элементы интерфейса, добавленные для Xray
-v26.4.25–v26.10.17. Имена JSON приведены в том виде, в котором панель передаёт
+v26.4.25–v26.10.21. Имена JSON приведены в том виде, в котором панель передаёт
 их Xray. Пустые необязательные значения обычно не должны фиксировать старый
 default: решение остаётся за установленной версией ядра.
 
@@ -224,7 +224,7 @@ JSON: `streamSettings.network = "xdrive"` и `streamSettings.xdriveSettings`.
 
 | Поле UI | JSON | Тип / поведение |
 |---|---|---|
-| Service | `service` | `local` или `google-drive`; старое `Google Drive` нормализуется. `template` сохраняется, но создаётся через JSON. |
+| Service | `service` | `local`, `google-drive` или `template`; старое `Google Drive` нормализуется. |
 | Remote folder | `remoteFolder` | Строка; согласуйте на обоих концах. |
 | Client ID / Client secret / Refresh token | `secrets[0..2]` | Три значения в указанном порядке, только для Google Drive. |
 | Segment bytes | `segmentBytes` | Неотрицательное число; `0` не передаётся. |
@@ -232,6 +232,15 @@ JSON: `streamSettings.network = "xdrive"` и `streamSettings.xdriveSettings`.
 | Session TTL | `sessionTtlSeconds` | Секунды; `0` не передаётся. |
 | Concurrency | `concurrency` | Неотрицательное число; `0` не передаётся. |
 | Eager window / Hole timeout | `eagerWindowMs`, `holeTimeoutMs` | Миллисекунды; `0` не передаётся. |
+| Template JSON | `template` | Объект операций сервиса `template`; JSON проверяется в UI. Для двухшаговых API можно задать `hrefPath` и `hrefMethod` в операциях. |
+| Use H3 / Use H2 | `tlsSettings.alpn` | H3 включается только при `security: "tls"` и точном `alpn: ["h3"]`; H2 устанавливает `["h2"]`. |
+| XMUX override | `xdriveSettings.xmux` | Если выключен, объект не передаётся и применяются defaults Xray. |
+| Max connections / concurrency | `xmux.maxConnections`, `xmux.maxConcurrency` | Число или допустимый ядром диапазон; одновременно задавать оба положительными нельзя. |
+| Client max reuse / H max requests / H reusable seconds / H keep-alive seconds | `xmux.cMaxReuseTimes`, `xmux.hMaxRequestTimes`, `xmux.hMaxReusableSecs`, `xmux.hKeepAlivePeriod` | Параметры переиспользования XMUX. |
+
+Для XDRIVE H3 редактор показывает FinalMask UDP и `quicParams`. В Google
+Drive H3 поддерживается только UDP-маска `noise`; `brutal`/`force-brutal`
+для QUIC запрещены. Ядро по умолчанию формирует Chrome-подобные HTTP headers.
 
 Для inbound нужен `settings.decryption != "none"`, один listening port и пустой
 Flow у всех клиентов. Для outbound нужен `settings.encryption != "none"`, пустой

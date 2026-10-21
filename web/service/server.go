@@ -842,6 +842,10 @@ func (s *ServerService) GetXrayUpgradePlan(version string) (*XrayUpgradePlan, er
 	if target >= 26_010_010 && target < 26_010_021 {
 		plan.Warnings = append(plan.Warnings, "Xray v26.10.10 and v26.10.17 trust compromised intermediate CAs. Upgrade to v26.10.21 or newer; update Xray-based clients separately.")
 	}
+	current := xrayVersionNumber(plan.CurrentVersion)
+	if current >= 26_010_010 && current < 26_010_021 && target >= 26_010_021 {
+		plan.Warnings = append(plan.Warnings, "Urgent security upgrade: the currently installed Xray trusts compromised intermediate CAs. Update the server and every Xray-based client to v26.10.21 or newer; changing the panel image alone does not update remote clients.")
+	}
 
 	generated, generateErr := s.xrayService.GetXrayConfig()
 	if generateErr != nil {

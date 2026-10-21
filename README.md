@@ -26,6 +26,8 @@ As an enhanced fork of the original X-UI project, 3X-UI provides improved stabil
 
 This fork is for people who want to stay on the familiar **3x-ui 2.x** panel instead of moving to 3x-ui 3.x, while continuing to receive updates for newer Xray-core releases. We update the 2.x interface, configuration generation, compatibility checks, and deployment files as Xray changes. Support for a new Xray feature depends on the panel version; check the release notes before upgrading the core. This fork is maintained independently of the upstream 3.x line.
 
+The current 2.9.4+26 branch targets Xray v26.10.21. See the [Russian release notes](RELEASE_NOTES_2.9.4_26_RU.md) and [UI field reference](XRAY_26_UI_FIELDS_RU.md). Prebuilt Ubuntu-compatible images are published by GitHub Actions as `ghcr.io/lagnuty/3x-ui:latest` and `:2.9.4-26` after the workflow succeeds.
+
 ## Quick Start
 
 ```bash
