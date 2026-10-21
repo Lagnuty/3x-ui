@@ -2,6 +2,28 @@ package sub
 
 import "testing"
 
+func TestFinalMaskFilterIsNotSharedWithClients(t *testing.T) {
+	mask := map[string]any{
+		"tcp": []any{
+			map[string]any{"type": "filter", "settings": map[string]any{"blockedSourceIPs": []any{"10.0.0.0/8"}}},
+			map[string]any{"type": "fragment", "settings": map[string]any{"packets": "tlshello"}},
+		},
+		"udp": []any{
+			map[string]any{"type": "filter", "settings": map[string]any{"allowedSourceIPs": []any{"geoip:cn"}}},
+		},
+	}
+	shared := normalizeFinalMask(mask)
+	if shared == nil {
+		t.Fatal("non-filter mask was lost")
+	}
+	if tcp := shared["tcp"].([]any); len(tcp) != 1 || tcp[0].(map[string]any)["type"] != "fragment" {
+		t.Fatalf("unexpected shared TCP masks: %#v", tcp)
+	}
+	if _, ok := shared["udp"]; ok {
+		t.Fatalf("inbound-only UDP filter leaked into client config: %#v", shared)
+	}
+}
+
 func TestNormalizedFinalMaskTCPMasksSkipsIncompleteXMC(t *testing.T) {
 	finalmask := map[string]any{
 		"tcp": []any{

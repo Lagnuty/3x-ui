@@ -1201,6 +1201,11 @@ class UdpMask extends XrayCommonClass {
 
     _getDefaultSettings(type, settings = {}) {
         switch (type) {
+            case 'filter':
+                return {
+                    allowedSourceIPs: Array.isArray(settings.allowedSourceIPs) ? settings.allowedSourceIPs : [],
+                    blockedSourceIPs: Array.isArray(settings.blockedSourceIPs) ? settings.blockedSourceIPs : [],
+                };
             case 'salamander':
             case 'mkcp-aes128gcm':
                 return { password: settings.password || '' };
@@ -1330,6 +1335,11 @@ class TcpMask extends XrayCommonClass {
 
     _getDefaultSettings(type, settings = {}) {
         switch (type) {
+            case 'filter':
+                return {
+                    allowedSourceIPs: Array.isArray(settings.allowedSourceIPs) ? settings.allowedSourceIPs : [],
+                    blockedSourceIPs: Array.isArray(settings.blockedSourceIPs) ? settings.blockedSourceIPs : [],
+                };
             case 'fragment':
                 return {
                     packets: settings.packets ?? 'tlshello',
@@ -1914,7 +1924,16 @@ class Inbound extends XrayCommonClass {
             return '';
         }
         const value = typeof finalmask.toJson === 'function' ? finalmask.toJson() : finalmask;
-        return Inbound.hasShareableFinalMaskValue(value) ? JSON.stringify(value) : '';
+        // Source-IP filters are server-side policy. Do not leak them into client links.
+        const shareable = { ...value };
+        for (const protocol of ['tcp', 'udp']) {
+            if (Array.isArray(shareable[protocol])) {
+                const masks = shareable[protocol].filter(mask => mask?.type !== 'filter');
+                if (masks.length > 0) shareable[protocol] = masks;
+                else delete shareable[protocol];
+            }
+        }
+        return Inbound.hasShareableFinalMaskValue(shareable) ? JSON.stringify(shareable) : '';
     }
 
     // Export finalmask with the same compact JSON payload shape that

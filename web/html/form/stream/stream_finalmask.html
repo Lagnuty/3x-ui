@@ -1,6 +1,6 @@
 {{define "form/streamFinalMask"}}
 <a-form :colon="false" :label-col="{ md: {span:8} }" :wrapper-col="{ md: {span:14} }"
-  v-if="inbound.protocol == Protocols.HYSTERIA || ['kcp', 'xhttp', 'raw', 'tcp', 'httpupgrade', 'ws', 'grpc'].includes(inbound.stream.network)">
+  v-if="inbound.protocol == Protocols.HYSTERIA || ['kcp', 'xhttp', 'xdrive', 'raw', 'tcp', 'httpupgrade', 'ws', 'grpc'].includes(inbound.stream.network)">
   <a-divider :style="{ margin: '5px 0 0' }"></a-divider>
 
   <!-- TCP Masks – for raw/tcp/httpupgrade/ws/grpc/xhttp -->
@@ -19,12 +19,23 @@
         <a-form-item label='{{ i18n "pages.xray.outbound.type" }}'>
           <a-select v-model="mask.type" @change="(type) => { mask.settings = mask._getDefaultSettings(type, {}); }"
             :dropdown-class-name="themeSwitcher.currentTheme">
+            <a-select-option value="filter">Source IP filter (v26.10.21+)</a-select-option>
             <a-select-option value="fragment">Fragment</a-select-option>
             <a-select-option value="header-custom">Header Custom</a-select-option>
             <a-select-option value="sudoku">Sudoku</a-select-option>
             <a-select-option value="xmc">XMC</a-select-option>
           </a-select>
         </a-form-item>
+
+        <template v-if="mask.type === 'filter'">
+          <a-alert type="info" show-icon message="Inbound only. A source must match the allowlist (if set) and not match the blocklist. Use IP, CIDR or geoip:code. Empty lists do not filter."></a-alert>
+          <a-form-item label="Allowed source IPs">
+            <a-select mode="tags" v-model="mask.settings.allowedSourceIPs" :dropdown-class-name="themeSwitcher.currentTheme" placeholder="geoip:cn, 10.0.0.0/8"></a-select>
+          </a-form-item>
+          <a-form-item label="Blocked source IPs">
+            <a-select mode="tags" v-model="mask.settings.blockedSourceIPs" :dropdown-class-name="themeSwitcher.currentTheme" placeholder="10.20.0.0/16"></a-select>
+          </a-form-item>
+        </template>
 
         <!-- Fragment settings -->
         <template v-if="mask.type === 'fragment'">
@@ -198,10 +209,10 @@
     </template>
   </template>
 
-  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.protocol == Protocols.WIREGUARD || inbound.stream.network == 'kcp' || inbound.protocol == Protocols.SHADOWSOCKS">
+  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.protocol == Protocols.WIREGUARD || inbound.stream.network == 'kcp' || inbound.protocol == Protocols.SHADOWSOCKS || (['xhttp', 'xdrive'].includes(inbound.stream.network) && inbound.stream.security === 'tls' && inbound.stream.tls.alpn.includes('h3'))">
     <a-form-item label="UDP Masks">
       <a-button icon="plus" type="primary" size="small"
-        @click="inbound.stream.addUdpMask(inbound.protocol === Protocols.HYSTERIA ? 'salamander' : 'mkcp-aes128gcm')"></a-button>
+        @click="inbound.stream.addUdpMask(inbound.protocol === Protocols.HYSTERIA ? 'salamander' : (['xhttp', 'xdrive'].includes(inbound.stream.network) ? 'filter' : 'mkcp-aes128gcm'))"></a-button>
     </a-form-item>
     <template v-if="inbound.stream.finalmask.udp && inbound.stream.finalmask.udp.length > 0">
       <a-form v-for="(mask, index) in inbound.stream.finalmask.udp" :key="index" :colon="false"
@@ -215,8 +226,12 @@
           <a-select v-model="mask.type"
             @change="(type) => { mask.settings = mask._getDefaultSettings(type, {}); if(inbound.stream.network === 'kcp') { inbound.stream.kcp.mtu = type === 'xdns' ? 900 : 1350; } }"
             :dropdown-class-name="themeSwitcher.currentTheme">
+            <a-select-option value="filter">Source IP filter (v26.10.21+)</a-select-option>
             <template v-if="inbound.protocol === Protocols.HYSTERIA">
               <a-select-option value="salamander">Salamander (Hysteria2)</a-select-option>
+            </template>
+            <template v-else-if="['xhttp', 'xdrive'].includes(inbound.stream.network)">
+              <a-select-option value="noise">Noise</a-select-option>
             </template>
             <template v-else>
               <a-select-option value="mkcp-aes128gcm">mKCP AES-128-GCM</a-select-option>
@@ -235,6 +250,15 @@
             </template>
           </a-select>
         </a-form-item>
+        <template v-if="mask.type === 'filter'">
+          <a-alert type="info" show-icon message="Inbound UDP source filter. Allowed and blocked entries accept IP, CIDR or geoip:code. This policy is not exported to clients."></a-alert>
+          <a-form-item label="Allowed source IPs">
+            <a-select mode="tags" v-model="mask.settings.allowedSourceIPs" :dropdown-class-name="themeSwitcher.currentTheme" placeholder="geoip:cn, 10.0.0.0/8"></a-select>
+          </a-form-item>
+          <a-form-item label="Blocked source IPs">
+            <a-select mode="tags" v-model="mask.settings.blockedSourceIPs" :dropdown-class-name="themeSwitcher.currentTheme" placeholder="10.20.0.0/16"></a-select>
+          </a-form-item>
+        </template>
         <a-form-item label="Password" v-if="['mkcp-aes128gcm', 'salamander'].includes(mask.type)">
           <a-input v-model.trim="mask.settings.password" placeholder="Obfuscation password"></a-input>
         </a-form-item>
@@ -441,7 +465,7 @@
   </template>
 
   <!-- quicParams – only for xhttp H3 and hysteria -->
-  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.stream.network == 'xhttp'">
+  <template v-if="inbound.protocol == Protocols.HYSTERIA || inbound.stream.network == 'xhttp' || (inbound.stream.network == 'xdrive' && inbound.stream.security === 'tls' && inbound.stream.tls.alpn.includes('h3'))">
     <a-form-item label="QUIC Params">
       <a-switch v-model="inbound.stream.finalmask.enableQuicParams"></a-switch>
     </a-form-item>

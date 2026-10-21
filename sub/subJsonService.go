@@ -166,6 +166,14 @@ func (s *SubJsonService) GetJson(subId string, host string) (string, string, err
 func (s *SubJsonService) getConfig(inbound *model.Inbound, client model.Client, host string) []json_util.RawMessage {
 	var newJsonArray []json_util.RawMessage
 	stream := s.streamData(inbound.StreamSettings)
+	// Source-IP filters are inbound-only policy and must not appear in client JSON.
+	if finalmask, ok := stream["finalmask"].(map[string]any); ok {
+		if clientMask := normalizeFinalMask(finalmask); clientMask != nil {
+			stream["finalmask"] = clientMask
+		} else {
+			delete(stream, "finalmask")
+		}
+	}
 
 	externalProxies, ok := stream["externalProxy"].([]any)
 	if !ok || len(externalProxies) == 0 {
